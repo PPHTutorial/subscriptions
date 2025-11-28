@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:subscriptions/core/responsive/responsive_helper.dart';
 
+import '../../../core/ads/ad_navigation_helper.dart';
 import '../../../core/notifications/notification_service.dart';
 import '../../settings/presentation/settings_screen.dart';
 import '../application/subscription_controller.dart';
@@ -27,6 +29,8 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     Future.microtask(
       () => ref.read(notificationServiceProvider).requestPermissions(),
     );
+    // Show app open ad when navigating to this screen
+    Future.microtask(() => AdNavigationHelper.showAppOpenAd());
   }
 
   @override
@@ -47,7 +51,10 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     final titles = ['Overview', 'Subscriptions', 'Settings'];
 
     return Scaffold(
-      extendBody: true,
+      extendBody:
+          false, // Changed to false so content doesn't hide behind bottom nav
+      extendBodyBehindAppBar:
+          false, // Ensure AppBar doesn't extend behind status bar
       appBar: AppBar(
         title: Text(titles[_index]),
         actions: [
@@ -125,7 +132,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
             ),
           ],
           IconButton(
-            icon: const Icon(Icons.add_alert_rounded),
+            icon: const Icon(Icons.add_rounded),
             tooltip: 'Add subscription',
             onPressed: _openCreateSheet,
           ),
@@ -147,6 +154,9 @@ class _HomeShellState extends ConsumerState<HomeShell> {
 
   Widget _buildNavBar(BuildContext context) {
     final theme = Theme.of(context);
+    final mediaQuery = MediaQuery.of(context);
+    final bottomPadding = mediaQuery.padding.bottom;
+
     return Container(
       decoration: BoxDecoration(
         color:
@@ -164,25 +174,28 @@ class _HomeShellState extends ConsumerState<HomeShell> {
           ),
         ],
       ),
-      child: BottomNavigationBar(
-        elevation: 0,
-        backgroundColor: Colors.transparent,
-        currentIndex: _index,
-        onTap: (value) => setState(() => _index = value),
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.auto_graph_rounded),
-            label: 'Overview',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.credit_card_rounded),
-            label: 'Subscriptions',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.settings_rounded),
-            label: 'Settings',
-          ),
-        ],
+      child: Padding(
+        padding: EdgeInsets.only(top: ResponsiveHelper.spacing(8)),
+        child: BottomNavigationBar(
+          elevation: 0,
+          backgroundColor: Colors.transparent,
+          currentIndex: _index,
+          onTap: (value) => setState(() => _index = value),
+          items: const [
+            BottomNavigationBarItem(
+              icon: Icon(Icons.auto_graph_rounded),
+              label: 'Overview',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.credit_card_rounded),
+              label: 'Subscriptions',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.settings_rounded),
+              label: 'Settings',
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -190,11 +203,10 @@ class _HomeShellState extends ConsumerState<HomeShell> {
   Future<void> _openCreateSheet() async {
     final notifier = ref.read(subscriptionControllerProvider.notifier);
 
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => AddSubscriptionSheet(
+    // Show interstitial ad before opening the sheet
+    await AdNavigationHelper.showModalBottomSheetWithInterstitial(
+      context,
+      (_) => AddSubscriptionSheet(
         onSubmit: (subscription) async {
           await notifier.addSubscription(subscription);
           if (mounted) Navigator.of(context).pop();

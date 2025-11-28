@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:in_app_review/in_app_review.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:subscriptions/core/ads/banner_ad_widget.dart';
+import 'package:subscriptions/core/responsive/responsive_helper.dart';
 
 import '../../../core/theme/theme_provider.dart';
 import '../../advanced/presentation/advanced_features_section.dart';
@@ -36,97 +38,115 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
     return Scaffold(
       body: ListView(
-        padding: const EdgeInsets.all(20),
+        padding: EdgeInsets.fromLTRB(
+            ResponsiveHelper.spacing(8),
+            ResponsiveHelper.spacing(8),
+            ResponsiveHelper.spacing(8),
+            // Add bottom padding to account for bottom nav bar + safe area
+            ResponsiveHelper.spacing(8) // Bottom nav bar height
+            ),
         children: [
           _SectionTitle(title: 'Appearance'),
           Card(
-            child: Column(
-              children: [
-                SwitchListTile(
-                  title: const Text('Dark mode'),
-                  subtitle: const Text('Toggle dark theme'),
-                  value: themeState.brightness == Brightness.dark,
-                  onChanged: (_) =>
-                      ref.read(themeProvider.notifier).toggleBrightness(),
-                ),
-                const Divider(height: 1),
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Color scheme',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      const SizedBox(height: 12),
-                      Wrap(
-                        spacing: 12,
-                        runSpacing: 12,
-                        children: AppColorScheme.values.map((scheme) {
-                          final isSelected = themeState.colorScheme == scheme;
-                          return GestureDetector(
-                            onTap: () => ref
-                                .read(themeProvider.notifier)
-                                .setColorScheme(scheme),
-                            child: Container(
-                              width: 48,
-                              height: 48,
-                              decoration: BoxDecoration(
-                                color: _getColorForScheme(scheme),
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: isSelected
-                                      ? Theme.of(context).colorScheme.primary
-                                      : Colors.transparent,
-                                  width: 3,
-                                ),
-                              ),
-                              child: isSelected
-                                  ? const Icon(
-                                      Icons.check,
-                                      color: Colors.white,
-                                      size: 24,
-                                    )
-                                  : null,
-                            ),
-                          );
-                        }).toList(),
-                      ),
-                    ],
+            child: Padding(
+              padding: EdgeInsets.all(ResponsiveHelper.spacing(16)),
+              child: Column(
+                children: [
+                  SwitchListTile(
+                    title: const Text('Dark mode'),
+                    subtitle: const Text('Toggle dark theme'),
+                    value: themeState.brightness == Brightness.dark,
+                    onChanged: (_) =>
+                        ref.read(themeProvider.notifier).toggleBrightness(),
                   ),
-                ),
-              ],
+                  const Divider(height: 1),
+                  Padding(
+                    padding: EdgeInsets.symmetric(
+                        vertical: ResponsiveHelper.spacing(16)),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Color scheme',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        const SizedBox(height: 12),
+                        Wrap(
+                          spacing: 12,
+                          runSpacing: 12,
+                          children: AppColorScheme.values.map((scheme) {
+                            final isSelected = themeState.colorScheme == scheme;
+                            return GestureDetector(
+                              onTap: () => ref
+                                  .read(themeProvider.notifier)
+                                  .setColorScheme(scheme),
+                              child: Container(
+                                width: 48,
+                                height: 48,
+                                decoration: BoxDecoration(
+                                  color: _getColorForScheme(scheme),
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: isSelected
+                                        ? Theme.of(context).colorScheme.primary
+                                        : Colors.transparent,
+                                    width: 3,
+                                  ),
+                                ),
+                                child: isSelected
+                                    ? const Icon(
+                                        Icons.check,
+                                        color: Colors.white,
+                                        size: 24,
+                                      )
+                                    : null,
+                              ),
+                            );
+                          }).toList(),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
+          const SizedBox(height: 24),
+          const BannerAdWidget(),
           const SizedBox(height: 24),
           const AdvancedFeaturesSection(),
           const SizedBox(height: 24),
           _SectionTitle(title: 'About'),
           Card(
-            child: Column(
-              children: [
-                ListTile(
-                  leading: const Icon(Icons.info_outline),
-                  title: const Text('App version'),
-                  subtitle:
-                      Text(_appVersion.isEmpty ? 'Loading...' : _appVersion),
-                ),
-                const Divider(height: 1),
-                ListTile(
-                  leading: const Icon(Icons.star_outline),
-                  title: const Text('Rate app'),
-                  onTap: _rateApp,
-                ),
-                const Divider(height: 1),
-                ListTile(
-                  leading: const Icon(Icons.share),
-                  title: const Text('Share app'),
-                  onTap: _shareApp,
-                ),
-              ],
+            // margin: EdgeInsets.all(ResponsiveHelper.spacing(8)),
+            child: Padding(
+              padding: EdgeInsets.all(ResponsiveHelper.spacing(16)),
+              child: Column(
+                children: [
+                  ListTile(
+                    leading: const Icon(Icons.info_outline),
+                    title: const Text('App version'),
+                    subtitle:
+                        Text(_appVersion.isEmpty ? 'Loading...' : _appVersion),
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: const Icon(Icons.star_outline),
+                    title: const Text('Rate app'),
+                    onTap: _rateApp,
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: const Icon(Icons.share),
+                    title: const Text('Share app'),
+                    onTap: _shareApp,
+                  ),
+                ],
+              ),
             ),
           ),
+          const SizedBox(height: 24),
+          const BannerAdWidget(),
         ],
       ),
     );

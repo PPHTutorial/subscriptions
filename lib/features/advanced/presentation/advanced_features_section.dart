@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/ads/ad_navigation_helper.dart';
 import '../../../core/config/app_config.dart';
 import '../../../core/responsive/responsive_helper.dart';
 import '../email_scanner/presentation/email_scanner_screen.dart';
@@ -14,94 +15,86 @@ class AdvancedFeaturesSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Card(
-      margin: EdgeInsets.all(ResponsiveHelper.spacing(20)),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: EdgeInsets.all(ResponsiveHelper.spacing(16)),
-            child: Text(
-              'Advanced Features',
-              style: Theme.of(context).textTheme.titleLarge,
+      child: Padding(
+        padding: EdgeInsets.all(ResponsiveHelper.spacing(16)),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: EdgeInsets.all(ResponsiveHelper.spacing(16)),
+              child: Text(
+                'Advanced Features',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
             ),
-          ),
-          const Divider(height: 1),
-          _FeatureTile(
-            icon: Icons.email_rounded,
-            title: 'Email Scanner',
-            subtitle: 'Automatically detect subscriptions from emails',
-            enabled: AppConfig.enableEmailScanner,
-            configured: AppConfig.isVercelProxyConfigured,
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const EmailScannerScreen(),
-                ),
-              );
-            },
-          ),
-          _FeatureTile(
-            icon: Icons.sms_rounded,
-            title: 'SMS Scanner',
-            subtitle: 'Scan bank alerts for subscription transactions',
-            enabled: AppConfig.enableSmsScanner,
-            configured: true, // SMS doesn't need API keys
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const SmsScannerScreen(),
-                ),
-              );
-            },
-          ),
-          _FeatureTile(
-            icon: Icons.receipt_long_rounded,
-            title: 'Receipt Upload',
-            subtitle: 'Extract details from receipt images using OCR',
-            enabled: AppConfig.enableReceiptUpload,
-            configured: true, // OCR uses Google ML Kit (no API key needed)
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const ReceiptUploadScreen(),
-                ),
-              );
-            },
-          ),
-          _FeatureTile(
-            icon: Icons.cloud_sync_rounded,
-            title: 'Cloud Sync',
-            subtitle: 'Sync subscriptions across devices',
-            enabled: AppConfig.enableCloudSync,
-            configured: AppConfig.isFirebaseConfigured,
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const CloudSyncScreen(),
-                ),
-              );
-            },
-          ),
-          _FeatureTile(
-            icon: Icons.psychology_rounded,
-            title: 'AI Insights',
-            subtitle: 'Get smart recommendations and waste predictions',
-            enabled: AppConfig.enableAiInsights,
-            configured: true, // Uses local logic, no API keys needed
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const AiInsightsScreen(),
-                ),
-              );
-            },
-          ),
-        ],
+            const Divider(height: 1),
+            _FeatureTile(
+              icon: Icons.email_rounded,
+              title: 'Email Scanner',
+              subtitle: 'Automatically detect subscriptions from emails',
+              enabled: AppConfig.enableEmailScanner,
+              configured: AppConfig.isVercelProxyConfigured,
+              onTap: () {
+                AdNavigationHelper.navigateWithInterstitial(
+                  context,
+                  const EmailScannerScreen(),
+                );
+              },
+            ),
+            _FeatureTile(
+              icon: Icons.sms_rounded,
+              title: 'SMS Scanner',
+              subtitle: 'Scan bank alerts for subscription transactions',
+              enabled: AppConfig.enableSmsScanner,
+              configured: true, // SMS doesn't need API keys
+              onTap: () {
+                AdNavigationHelper.navigateWithInterstitial(
+                  context,
+                  const SmsScannerScreen(),
+                );
+              },
+            ),
+            _FeatureTile(
+              icon: Icons.receipt_long_rounded,
+              title: 'Receipt Upload',
+              subtitle: 'Extract details from receipt images using OCR',
+              enabled: AppConfig.enableReceiptUpload,
+              configured: true, // OCR uses Google ML Kit (no API key needed)
+              onTap: () {
+                AdNavigationHelper.navigateWithInterstitial(
+                  context,
+                  const ReceiptUploadScreen(),
+                );
+              },
+            ),
+            _FeatureTile(
+              icon: Icons.cloud_sync_rounded,
+              title: 'Cloud Sync',
+              subtitle: 'Sync subscriptions across devices',
+              enabled: AppConfig.enableCloudSync,
+              configured: AppConfig.isFirebaseConfigured,
+              onTap: () {
+                AdNavigationHelper.navigateWithInterstitial(
+                  context,
+                  const CloudSyncScreen(),
+                );
+              },
+            ),
+            _FeatureTile(
+              icon: Icons.psychology_rounded,
+              title: 'AI Insights',
+              subtitle: 'Get smart recommendations and waste predictions',
+              enabled: AppConfig.enableAiInsights,
+              configured: true, // Uses local logic, no API keys needed
+              onTap: () {
+                AdNavigationHelper.navigateWithInterstitial(
+                  context,
+                  const AiInsightsScreen(),
+                );
+              },
+            ),
+          ],
+        ),
       ),
     );
   }

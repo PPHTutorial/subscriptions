@@ -24,6 +24,12 @@
 		<string>$(FLUTTER_BUILD_NUMBER)</string>
 		<key>NSUserNotificationUsageDescription</key>
 		<string>Subscriptions uses notifications to remind you about upcoming renewals.</string>
+		<key>NSCameraUsageDescription</key>
+		<string>Subscriptions needs camera access to take photos of receipts for automatic subscription detection.</string>
+		<key>NSPhotoLibraryUsageDescription</key>
+		<string>Subscriptions needs photo library access to select receipt images for automatic subscription detection.</string>
+		<key>NSPhotoLibraryAddUsageDescription</key>
+		<string>Subscriptions needs photo library access to save receipt images.</string>
 		<key>LSRequiresIPhoneOS</key>
 		<true />
 		<key>UILaunchStoryboardName</key>

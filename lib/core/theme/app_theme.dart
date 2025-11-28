@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../responsive/responsive_helper.dart';
 import 'theme_provider.dart';
 
@@ -273,6 +274,11 @@ class AppTheme {
         elevation: 0,
         centerTitle: false,
         titleTextStyle: textTheme.titleLarge?.copyWith(color: neutral),
+        systemOverlayStyle: SystemUiOverlayStyle(
+          statusBarColor: Colors.transparent,
+          statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
+          statusBarBrightness: isDark ? Brightness.dark : Brightness.light,
+        ),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
@@ -364,6 +370,8 @@ class AppTheme {
       cardTheme: CardThemeData(
         color: isDark ? const Color(0xFF1E293B) : Colors.white,
         elevation: 0,
+        shadowColor: Colors.transparent,
+        surfaceTintColor: Colors.transparent,
         margin: EdgeInsets.all(ResponsiveHelper.spacing(8)),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(ResponsiveHelper.spacing(24)),

@@ -16,22 +16,128 @@ class ResponsiveHelper {
   }
 
   // Responsive font sizes
-  static double fontSize(double size) => size.sp;
+  // Uses ScreenUtil if initialized, otherwise returns the size as-is
+  static double fontSize(double size) {
+    try {
+      return size.sp;
+    } catch (e) {
+      // If ScreenUtil not initialized, return size as-is
+      return size;
+    }
+  }
 
   // Responsive spacing
-  static double spacing(double size) => size.w;
+  // Uses ScreenUtil if initialized, otherwise returns the size as-is
+  static double spacing(double size) {
+    try {
+      return size.w;
+    } catch (e) {
+      // If ScreenUtil not initialized, return size as-is
+      return size;
+    }
+  }
 
   // Responsive height
-  static double height(double size) => size.h;
+  // Uses ScreenUtil if initialized, otherwise returns the size as-is
+  static double height(double size) {
+    try {
+      return size.h;
+    } catch (e) {
+      // If ScreenUtil not initialized, return size as-is
+      return size;
+    }
+  }
 
   // Responsive width
-  static double width(double size) => size.w;
+  // Uses ScreenUtil if initialized, otherwise returns the size as-is
+  static double width(double size) {
+    try {
+      return size.w;
+    } catch (e) {
+      // If ScreenUtil not initialized, return size as-is
+      return size;
+    }
+  }
 
-  // Screen width
-  static double screenWidth() => 1.sw;
+  // Screen width (safe area aware)
+  // Uses MediaQuery to get actual screen width considering safe area
+  static double screenWidth(BuildContext? context) {
+    if (context != null) {
+      final mediaQuery = MediaQuery.of(context);
+      // Return the actual screen width from MediaQuery
+      return mediaQuery.size.width;
+    }
 
-  // Screen height
-  static double screenHeight() => 1.sh;
+    try {
+      return 1.sw;
+    } catch (e) {
+      // If ScreenUtil not initialized, return default design width
+      return designWidth;
+    }
+  }
+
+  // Screen height (safe area aware)
+  // Uses MediaQuery to get actual screen height considering safe area
+  static double screenHeight(BuildContext? context) {
+    if (context != null) {
+      final mediaQuery = MediaQuery.of(context);
+      // Return the actual screen height from MediaQuery
+      return mediaQuery.size.height;
+    }
+
+    try {
+      return 1.sh;
+    } catch (e) {
+      // If ScreenUtil not initialized, return default design height
+      return designHeight;
+    }
+  }
+
+  // Safe area top padding (status bar, notch, etc.)
+  static double safeAreaTop(BuildContext context) {
+    final mediaQuery = MediaQuery.of(context);
+    return mediaQuery.padding.top;
+  }
+
+  // Safe area bottom padding (home indicator, navigation bar, etc.)
+  static double safeAreaBottom(BuildContext context) {
+    final mediaQuery = MediaQuery.of(context);
+    return mediaQuery.padding.bottom;
+  }
+
+  // Safe area left padding
+  static double safeAreaLeft(BuildContext context) {
+    final mediaQuery = MediaQuery.of(context);
+    return mediaQuery.padding.left;
+  }
+
+  // Safe area right padding
+  static double safeAreaRight(BuildContext context) {
+    final mediaQuery = MediaQuery.of(context);
+    return mediaQuery.padding.right;
+  }
+
+  // Available height (screen height minus safe area insets)
+  static double availableHeight(BuildContext context) {
+    final mediaQuery = MediaQuery.of(context);
+    return mediaQuery.size.height -
+        mediaQuery.padding.top -
+        mediaQuery.padding.bottom;
+  }
+
+  // Available width (screen width minus safe area insets)
+  static double availableWidth(BuildContext context) {
+    final mediaQuery = MediaQuery.of(context);
+    return mediaQuery.size.width -
+        mediaQuery.padding.left -
+        mediaQuery.padding.right;
+  }
+
+  // Get all safe area insets
+  static EdgeInsets safeAreaInsets(BuildContext context) {
+    final mediaQuery = MediaQuery.of(context);
+    return mediaQuery.padding;
+  }
 
   // Check if device is tablet
   static bool isTablet(BuildContext context) {

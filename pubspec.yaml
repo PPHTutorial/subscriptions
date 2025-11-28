@@ -85,6 +85,11 @@ dependencies:
   google_mlkit_text_recognition: ^0.11.0
   image_picker: ^1.0.7
   
+  # File Picking & Document Reading
+  file_picker: ^8.1.2
+  pdf: ^3.11.1
+  archive: ^3.4.10
+  
   # Cloud Sync
   firebase_core: ^3.6.0
   firebase_auth: ^5.3.1

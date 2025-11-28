@@ -26,6 +26,12 @@ subprojects {
     project.evaluationDependsOn(":app")
 }
 
+// Fix namespace issues for packages that don't specify it
+// Note: The telephony package (0.2.0) is discontinued and missing namespace
+// Manual fix required: Edit %USERPROFILE%\.pub-cache\hosted\pub.dev\telephony-0.2.0\android\build.gradle
+// Add: namespace = "com.shounakmulay.telephony" in the android block
+// See TELEPHONY_FIX.md for details
+
 tasks.register<Delete>("clean") {
     delete(rootProject.layout.buildDirectory)
 }

@@ -1,0 +1,12 @@
+// Fix namespace for telephony package (discontinued, missing namespace)
+allprojects {
+    afterEvaluate { project ->
+        if (project.name == "telephony") {
+            def android = project.extensions.findByName("android")
+            if (android != null) {
+                android.namespace = "com.shounakmulay.telephony"
+            }
+        }
+    }
+}
+

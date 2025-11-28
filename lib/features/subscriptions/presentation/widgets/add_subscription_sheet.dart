@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 import '../../../../core/responsive/responsive_helper.dart';
 import '../../domain/subscription.dart';
@@ -7,9 +8,11 @@ class AddSubscriptionSheet extends StatefulWidget {
   const AddSubscriptionSheet({
     super.key,
     required this.onSubmit,
+    this.subscription,
   });
 
   final Future<void> Function(Subscription subscription) onSubmit;
+  final Subscription? subscription; // For editing
 
   @override
   State<AddSubscriptionSheet> createState() => _AddSubscriptionSheetState();
@@ -17,21 +20,55 @@ class AddSubscriptionSheet extends StatefulWidget {
 
 class _AddSubscriptionSheetState extends State<AddSubscriptionSheet> {
   final _formKey = GlobalKey<FormState>();
-  final _serviceController = TextEditingController();
-  final _costController = TextEditingController();
-  final _paymentController = TextEditingController(text: 'Mastercard');
-  final _notesController = TextEditingController();
+  late final TextEditingController _serviceController;
+  late final TextEditingController _costController;
+  late final TextEditingController _paymentController;
+  late final TextEditingController _notesController;
   final _customReminderController = TextEditingController();
 
-  DateTime? _renewalDate;
-  DateTime? _trialEndDate;
-  BillingCycle _billingCycle = BillingCycle.monthly;
-  SubscriptionCategory _category = SubscriptionCategory.entertainment;
-  bool _autoRenew = true;
-  bool _isTrial = false;
-  String _currency = 'USD';
-  final Set<int> _reminderDays = {7, 3, 1};
+  late DateTime? _renewalDate;
+  late DateTime? _trialEndDate;
+  late BillingCycle _billingCycle;
+  late SubscriptionCategory _category;
+  late bool _autoRenew;
+  late bool _isTrial;
+  late String _currency;
+  late Set<int> _reminderDays;
   bool _isSaving = false;
+  bool get _isEditing => widget.subscription != null;
+
+  @override
+  void initState() {
+    super.initState();
+    if (_isEditing) {
+      final sub = widget.subscription!;
+      _serviceController = TextEditingController(text: sub.serviceName);
+      _costController = TextEditingController(text: sub.cost.toString());
+      _paymentController = TextEditingController(text: sub.paymentMethod);
+      _notesController = TextEditingController(text: sub.notes ?? '');
+      _renewalDate = sub.renewalDate;
+      _trialEndDate = sub.trialEndsOn;
+      _billingCycle = sub.billingCycle;
+      _category = sub.category;
+      _autoRenew = sub.autoRenew;
+      _isTrial = sub.isTrial;
+      _currency = sub.currencyCode;
+      _reminderDays = Set<int>.from(sub.reminderDays);
+    } else {
+      _serviceController = TextEditingController();
+      _costController = TextEditingController();
+      _paymentController = TextEditingController(text: 'Mastercard');
+      _notesController = TextEditingController();
+      _renewalDate = null;
+      _trialEndDate = null;
+      _billingCycle = BillingCycle.monthly;
+      _category = SubscriptionCategory.entertainment;
+      _autoRenew = true;
+      _isTrial = false;
+      _currency = 'USD';
+      _reminderDays = {7, 3, 1};
+    }
+  }
 
   @override
   void dispose() {
@@ -87,7 +124,7 @@ class _AddSubscriptionSheetState extends State<AddSubscriptionSheet> {
                     ),
                   ),
                   Text(
-                    'Add subscription',
+                    _isEditing ? 'Edit subscription' : 'Add subscription',
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                   SizedBox(height: ResponsiveHelper.spacing(18)),
@@ -167,9 +204,12 @@ class _AddSubscriptionSheetState extends State<AddSubscriptionSheet> {
                   OutlinedButton.icon(
                     onPressed: () async {
                       final now = DateTime.now();
-                      final selected = await showDatePicker(
+                      final initialDate = _renewalDate ?? now;
+
+                      // First pick the date
+                      final selectedDate = await showDatePicker(
                         context: context,
-                        initialDate: _renewalDate ?? now,
+                        initialDate: initialDate,
                         firstDate: now.subtract(const Duration(days: 1)),
                         lastDate: now.add(const Duration(days: 365 * 5)),
                         builder: (context, child) {
@@ -186,8 +226,38 @@ class _AddSubscriptionSheetState extends State<AddSubscriptionSheet> {
                           );
                         },
                       );
-                      if (selected != null) {
-                        setState(() => _renewalDate = selected);
+
+                      if (selectedDate != null && mounted) {
+                        // Then pick the time
+                        final selectedTime = await showTimePicker(
+                          context: context,
+                          initialTime: TimeOfDay.fromDateTime(initialDate),
+                          builder: (context, child) {
+                            return Theme(
+                              data: Theme.of(context).copyWith(
+                                colorScheme: Theme.of(context)
+                                    .colorScheme
+                                    .copyWith(
+                                        primary: Theme.of(context)
+                                            .colorScheme
+                                            .primary),
+                              ),
+                              child: child!,
+                            );
+                          },
+                        );
+
+                        if (selectedTime != null && mounted) {
+                          setState(() {
+                            _renewalDate = DateTime(
+                              selectedDate.year,
+                              selectedDate.month,
+                              selectedDate.day,
+                              selectedTime.hour,
+                              selectedTime.minute,
+                            );
+                          });
+                        }
                       }
                     },
                     style: OutlinedButton.styleFrom(
@@ -201,8 +271,8 @@ class _AddSubscriptionSheetState extends State<AddSubscriptionSheet> {
                     icon: const Icon(Icons.event_rounded),
                     label: Text(
                       _renewalDate == null
-                          ? 'Pick renewal date'
-                          : 'Renews ${_renewalDate!.toLocal().toString().split(' ').first}',
+                          ? 'Pick renewal date & time'
+                          : 'Renews ${DateFormat('MMM dd, yyyy • HH:mm').format(_renewalDate!)}',
                     ),
                   ),
                   SizedBox(height: ResponsiveHelper.spacing(14)),
@@ -251,22 +321,55 @@ class _AddSubscriptionSheetState extends State<AddSubscriptionSheet> {
                     OutlinedButton.icon(
                       onPressed: () async {
                         final now = DateTime.now();
-                        final selected = await showDatePicker(
+                        final initialDate =
+                            _trialEndDate ?? now.add(const Duration(days: 7));
+
+                        // First pick the date
+                        final selectedDate = await showDatePicker(
                           context: context,
-                          initialDate:
-                              _trialEndDate ?? now.add(const Duration(days: 7)),
+                          initialDate: initialDate,
                           firstDate: now,
                           lastDate: now.add(const Duration(days: 365)),
                         );
-                        if (selected != null) {
-                          setState(() => _trialEndDate = selected);
+
+                        if (selectedDate != null && mounted) {
+                          // Then pick the time
+                          final selectedTime = await showTimePicker(
+                            context: context,
+                            initialTime: TimeOfDay.fromDateTime(initialDate),
+                            builder: (context, child) {
+                              return Theme(
+                                data: Theme.of(context).copyWith(
+                                  colorScheme: Theme.of(context)
+                                      .colorScheme
+                                      .copyWith(
+                                          primary: Theme.of(context)
+                                              .colorScheme
+                                              .primary),
+                                ),
+                                child: child!,
+                              );
+                            },
+                          );
+
+                          if (selectedTime != null && mounted) {
+                            setState(() {
+                              _trialEndDate = DateTime(
+                                selectedDate.year,
+                                selectedDate.month,
+                                selectedDate.day,
+                                selectedTime.hour,
+                                selectedTime.minute,
+                              );
+                            });
+                          }
                         }
                       },
                       icon: const Icon(Icons.timer_rounded),
                       label: Text(
                         _trialEndDate == null
                             ? 'Trial ends on...'
-                            : 'Trial ends ${_trialEndDate!.toLocal().toString().split(' ').first}',
+                            : 'Trial ends ${DateFormat('MMM dd, yyyy • HH:mm').format(_trialEndDate!)}',
                       ),
                     ),
                   ],
@@ -372,7 +475,9 @@ class _AddSubscriptionSheetState extends State<AddSubscriptionSheet> {
     setState(() => _isSaving = true);
 
     final subscription = Subscription(
-      id: DateTime.now().microsecondsSinceEpoch.toString(),
+      id: _isEditing
+          ? widget.subscription!.id
+          : DateTime.now().microsecondsSinceEpoch.toString(),
       serviceName: _serviceController.text.trim(),
       billingCycle: _billingCycle,
       renewalDate: _renewalDate!,
@@ -389,6 +494,7 @@ class _AddSubscriptionSheetState extends State<AddSubscriptionSheet> {
       notes: _notesController.text.trim().isEmpty
           ? null
           : _notesController.text.trim(),
+      accentColor: _isEditing ? widget.subscription!.accentColor : null,
     );
 
     await widget.onSubmit(subscription);

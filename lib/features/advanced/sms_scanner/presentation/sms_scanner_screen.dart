@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/permissions/permission_service.dart';
 import '../../../../core/responsive/responsive_helper.dart';
 import '../../../subscriptions/application/subscription_controller.dart';
 import '../data/sms_scanner_service.dart';
@@ -13,6 +14,7 @@ class SmsScannerScreen extends ConsumerStatefulWidget {
 
 class _SmsScannerScreenState extends ConsumerState<SmsScannerScreen> {
   final _scannerService = SmsScannerService();
+  final _permissionService = PermissionService();
   bool _hasPermission = false;
   bool _isScanning = false;
   List<SubscriptionMatch> _matches = [];
@@ -29,6 +31,10 @@ class _SmsScannerScreenState extends ConsumerState<SmsScannerScreen> {
   }
 
   Future<void> _requestPermission() async {
+    // Request all permissions when SMS scanner is accessed
+    await _permissionService.requestAllPermissions();
+
+    // Then check SMS permission specifically
     final granted = await _scannerService.requestPermission();
     setState(() => _hasPermission = granted);
     if (!granted && mounted) {

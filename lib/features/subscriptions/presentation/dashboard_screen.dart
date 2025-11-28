@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../core/ads/banner_ad_widget.dart';
+import '../../../../core/ads/native_ad_widget.dart';
+import '../../../../core/responsive/responsive_helper.dart';
 import '../application/subscription_controller.dart';
 import '../domain/subscription.dart';
 import 'widgets/analytics_section.dart';
@@ -120,7 +122,7 @@ class DashboardScreen extends ConsumerWidget {
                       'All subscriptions',
                       style: Theme.of(context).textTheme.titleLarge,
                     ),
-                    const SizedBox(height: 12),
+                    SizedBox(height: ResponsiveHelper.spacing(4)),
                   ],
                 ),
               ),
@@ -128,23 +130,49 @@ class DashboardScreen extends ConsumerWidget {
             SliverList(
               delegate: SliverChildBuilderDelegate(
                 (context, index) {
+                  // Show native ad every 4 items
+                  if (index > 0 && index % 4 == 0) {
+                    return Column(
+                      children: [
+                        const NativeAdWidget(),
+                        Padding(
+                          padding: EdgeInsets.symmetric(
+                            vertical: ResponsiveHelper.spacing(8),
+                            horizontal: ResponsiveHelper.spacing(16),
+                          ),
+                          child: SubscriptionCard(
+                            subscription: subscriptions[index - (index ~/ 4)],
+                          ),
+                        ),
+                      ],
+                    );
+                  }
+                  // Adjust index for native ads
+                  final adjustedIndex = index - (index ~/ 4);
+                  if (adjustedIndex >= subscriptions.length) {
+                    return const SizedBox.shrink();
+                  }
                   return Padding(
-                    padding: EdgeInsets.only(
-                      left: 20,
-                      right: 20,
-                      bottom: index == subscriptions.length - 1 ? 32 : 16,
+                    padding: EdgeInsets.symmetric(
+                      vertical: ResponsiveHelper.spacing(8),
+                      horizontal: ResponsiveHelper.spacing(16),
                     ),
                     child: SubscriptionCard(
-                      subscription: subscriptions[index],
+                      subscription: subscriptions[adjustedIndex],
                     ),
                   );
                 },
-                childCount: subscriptions.length,
+                childCount: subscriptions.length +
+                    (subscriptions.length > 0
+                        ? (subscriptions.length ~/ 4)
+                        : 0),
               ),
             ),
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 16),
+                padding: EdgeInsets.symmetric(
+                  vertical: ResponsiveHelper.spacing(8),
+                ),
                 child: const BannerAdWidget(),
               ),
             ),
@@ -223,9 +251,10 @@ class DashboardScreen extends ConsumerWidget {
               'Top 5 Expensive Subscriptions',
               style: Theme.of(context).textTheme.titleLarge,
             ),
-            const SizedBox(height: 16),
+            SizedBox(height: ResponsiveHelper.spacing(16)),
             ...topExpensive.map((sub) => Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
+                  padding:
+                      EdgeInsets.only(bottom: ResponsiveHelper.spacing(12)),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -246,6 +275,7 @@ class DashboardScreen extends ConsumerWidget {
                     ],
                   ),
                 )),
+            SizedBox(height: ResponsiveHelper.spacing(16)),
           ],
         ),
       ),

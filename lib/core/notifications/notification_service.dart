@@ -84,6 +84,12 @@ class LocalNotificationService implements NotificationService {
       return;
     }
 
+    // Check if exact alarms are permitted (Android 12+)
+    bool canScheduleExact = true;
+    if (Platform.isAndroid) {
+      canScheduleExact = await _canScheduleExactAlarms();
+    }
+
     for (final offset in subscription.reminderDays) {
       final scheduledDate =
           subscription.renewalDate.subtract(Duration(days: offset));
@@ -92,32 +98,115 @@ class LocalNotificationService implements NotificationService {
       final tzDate = tz.TZDateTime.from(scheduledDate, tz.local);
       final id = _notificationId(subscription.id, offset);
 
-      await _plugin.zonedSchedule(
-        id,
-        '${subscription.serviceName} renews soon',
-        _message(subscription, offset),
-        tzDate,
-        NotificationDetails(
-          android: AndroidNotificationDetails(
-            _channelId,
-            'Subscription reminders',
-            channelDescription: 'Notifications for upcoming renewals',
-            importance: Importance.max,
-            priority: Priority.high,
-            category: AndroidNotificationCategory.reminder,
-          ),
-          iOS: const DarwinNotificationDetails(
-            presentAlert: true,
-            presentBadge: true,
-            presentSound: true,
-          ),
-        ),
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-        uiLocalNotificationDateInterpretation:
-            UILocalNotificationDateInterpretation.absoluteTime,
-        payload: subscription.id,
-      );
+      try {
+        // Try exact scheduling first if permitted
+        if (canScheduleExact && Platform.isAndroid) {
+          await _plugin.zonedSchedule(
+            id,
+            '${subscription.serviceName} renews soon',
+            _message(subscription, offset),
+            tzDate,
+            NotificationDetails(
+              android: AndroidNotificationDetails(
+                _channelId,
+                'Subscription reminders',
+                channelDescription: 'Notifications for upcoming renewals',
+                importance: Importance.max,
+                priority: Priority.high,
+                category: AndroidNotificationCategory.reminder,
+              ),
+              iOS: const DarwinNotificationDetails(
+                presentAlert: true,
+                presentBadge: true,
+                presentSound: true,
+              ),
+            ),
+            androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+            uiLocalNotificationDateInterpretation:
+                UILocalNotificationDateInterpretation.absoluteTime,
+            payload: subscription.id,
+          );
+        } else {
+          // Fall back to inexact scheduling
+          await _plugin.zonedSchedule(
+            id,
+            '${subscription.serviceName} renews soon',
+            _message(subscription, offset),
+            tzDate,
+            NotificationDetails(
+              android: AndroidNotificationDetails(
+                _channelId,
+                'Subscription reminders',
+                channelDescription: 'Notifications for upcoming renewals',
+                importance: Importance.max,
+                priority: Priority.high,
+                category: AndroidNotificationCategory.reminder,
+              ),
+              iOS: const DarwinNotificationDetails(
+                presentAlert: true,
+                presentBadge: true,
+                presentSound: true,
+              ),
+            ),
+            androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+            uiLocalNotificationDateInterpretation:
+                UILocalNotificationDateInterpretation.absoluteTime,
+            payload: subscription.id,
+          );
+        }
+      } catch (e) {
+        // If exact scheduling fails, fall back to inexact
+        if (canScheduleExact &&
+            e.toString().contains('exact_alarms_not_permitted')) {
+          canScheduleExact = false;
+          // Retry with inexact scheduling
+          await _plugin.zonedSchedule(
+            id,
+            '${subscription.serviceName} renews soon',
+            _message(subscription, offset),
+            tzDate,
+            NotificationDetails(
+              android: AndroidNotificationDetails(
+                _channelId,
+                'Subscription reminders',
+                channelDescription: 'Notifications for upcoming renewals',
+                importance: Importance.max,
+                priority: Priority.high,
+                category: AndroidNotificationCategory.reminder,
+              ),
+              iOS: const DarwinNotificationDetails(
+                presentAlert: true,
+                presentBadge: true,
+                presentSound: true,
+              ),
+            ),
+            androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+            uiLocalNotificationDateInterpretation:
+                UILocalNotificationDateInterpretation.absoluteTime,
+            payload: subscription.id,
+          );
+        } else {
+          // Re-throw if it's a different error
+          rethrow;
+        }
+      }
     }
+  }
+
+  /// Check if exact alarms can be scheduled (Android 12+)
+  ///
+  /// Note: On Android 12+ (API 31+), SCHEDULE_EXACT_ALARM permission must be
+  /// granted by the user through Settings. This permission cannot be requested
+  /// programmatically - users must enable it manually in app settings.
+  ///
+  /// Returns true if we should try exact scheduling (will fall back on error)
+  Future<bool> _canScheduleExactAlarms() async {
+    if (!Platform.isAndroid) return true;
+
+    // We'll attempt exact scheduling and catch the error if permission is not granted
+    // This is more reliable than trying to check the permission status
+    // since permission_handler doesn't directly support SCHEDULE_EXACT_ALARM
+    return true;
   }
 
   @override

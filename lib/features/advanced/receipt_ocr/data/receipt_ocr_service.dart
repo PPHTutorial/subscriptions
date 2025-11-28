@@ -1,4 +1,6 @@
 import 'dart:io';
+import 'package:archive/archive.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:image_picker/image_picker.dart';
 import '../../../subscriptions/domain/subscription.dart';
@@ -19,6 +21,65 @@ class ReceiptOcrService {
     return File(image.path);
   }
 
+  /// Pick an image from camera or gallery
+  /// Uses image_picker which works reliably for images
+  Future<ReceiptFile?> pickImageFile({bool fromCamera = false}) async {
+    final image = await pickImage(fromCamera: fromCamera);
+    if (image == null) return null;
+    return ReceiptFile(
+      file: image,
+      type: ReceiptFileType.image,
+    );
+  }
+
+  /// Pick a document file (PDF or DOCX)
+  /// Uses file_picker for document selection
+  Future<ReceiptFile?> pickDocumentFile() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['pdf', 'docx'],
+        allowMultiple: false,
+      );
+
+      if (result == null ||
+          result.files.isEmpty ||
+          result.files.single.path == null) {
+        return null;
+      }
+
+      final filePath = result.files.single.path!;
+      final file = File(filePath);
+      final extension = result.files.single.extension?.toLowerCase();
+
+      ReceiptFileType fileType;
+      if (extension == 'pdf') {
+        fileType = ReceiptFileType.pdf;
+      } else if (extension == 'docx') {
+        fileType = ReceiptFileType.docx;
+      } else {
+        // Default to PDF if extension is unclear
+        fileType = ReceiptFileType.pdf;
+      }
+
+      return ReceiptFile(
+        file: file,
+        type: fileType,
+      );
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  /// Pick a file (image, PDF, or DOCX) - legacy method for backward compatibility
+  /// For images, use pickImageFile() instead
+  @Deprecated(
+      'Use pickImageFile() for images or pickDocumentFile() for documents')
+  Future<ReceiptFile?> pickFile({bool fromCamera = false}) async {
+    // Always use image_picker for images (works reliably)
+    return pickImageFile(fromCamera: fromCamera);
+  }
+
   /// Extract text from image using OCR
   Future<String> extractText(File imageFile) async {
     final inputImage = InputImage.fromFilePath(imageFile.path);
@@ -27,6 +88,49 @@ class ReceiptOcrService {
 
     final text = recognizedText.text;
     return text;
+  }
+
+  /// Extract text from PDF file
+  /// Note: The pdf package doesn't directly extract text, so we return a placeholder
+  /// In production, consider using a server-side PDF text extraction service
+  Future<String> extractTextFromPdf(File pdfFile) async {
+    try {
+      // PDF text extraction requires additional libraries
+      // For now, we'll show an error message suggesting to use image or DOCX
+      throw UnimplementedError(
+        'PDF text extraction is not yet fully implemented. Please convert PDF to image or use DOCX format.',
+      );
+    } catch (e) {
+      throw Exception('Failed to extract text from PDF: $e');
+    }
+  }
+
+  /// Extract text from DOCX file
+  Future<String> extractTextFromDocx(File docxFile) async {
+    try {
+      final bytes = await docxFile.readAsBytes();
+      final archive = ZipDecoder().decodeBytes(bytes);
+      final text = StringBuffer();
+
+      // DOCX files are ZIP archives containing XML files
+      // Extract text from document.xml
+      for (final file in archive) {
+        if (file.name == 'word/document.xml') {
+          final xmlContent = String.fromCharCodes(file.content as List<int>);
+          // Simple regex to extract text between <w:t> tags
+          final textPattern = RegExp(r'<w:t[^>]*>([^<]*)</w:t>');
+          final matches = textPattern.allMatches(xmlContent);
+          for (final match in matches) {
+            text.write(match.group(1) ?? '');
+            text.write(' ');
+          }
+        }
+      }
+
+      return text.toString().trim();
+    } catch (e) {
+      throw Exception('Failed to extract text from DOCX: $e');
+    }
   }
 
   /// Extract subscription details from receipt/invoice image
@@ -39,6 +143,33 @@ class ReceiptOcrService {
       return ReceiptExtractionResult(
         success: false,
         error: 'Failed to process image: $e',
+      );
+    }
+  }
+
+  /// Extract subscription details from receipt file (image, PDF, or DOCX)
+  Future<ReceiptExtractionResult> extractSubscriptionDetailsFromFile(
+      ReceiptFile receiptFile) async {
+    try {
+      String text;
+
+      switch (receiptFile.type) {
+        case ReceiptFileType.image:
+          text = await extractText(receiptFile.file);
+          break;
+        case ReceiptFileType.pdf:
+          text = await extractTextFromPdf(receiptFile.file);
+          break;
+        case ReceiptFileType.docx:
+          text = await extractTextFromDocx(receiptFile.file);
+          break;
+      }
+
+      return _parseReceiptText(text);
+    } catch (e) {
+      return ReceiptExtractionResult(
+        success: false,
+        error: 'Failed to process file: $e',
       );
     }
   }
@@ -288,6 +419,24 @@ class ReceiptOcrService {
   void dispose() {
     _textRecognizer.close();
   }
+}
+
+/// Enum for receipt file types
+enum ReceiptFileType {
+  image,
+  pdf,
+  docx,
+}
+
+/// Class to represent a receipt file with its type
+class ReceiptFile {
+  ReceiptFile({
+    required this.file,
+    required this.type,
+  });
+
+  final File file;
+  final ReceiptFileType type;
 }
 
 class ReceiptExtractionResult {

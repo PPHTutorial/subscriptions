@@ -5,6 +5,8 @@ import 'package:intl/intl.dart';
 
 import '../../application/subscription_controller.dart';
 import '../../domain/subscription.dart';
+import '../subscription_details_screen.dart';
+import 'add_subscription_sheet.dart';
 
 class SubscriptionCard extends ConsumerWidget {
   const SubscriptionCard({
@@ -18,27 +20,55 @@ class SubscriptionCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final color = Color(subscription.accentColor ?? 0xFF6247EA);
-    final contrast =
-        ThemeData.estimateBrightnessForColor(color) == Brightness.dark
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
+
+    // Use theme card color by default, or custom accentColor if set
+    final cardColor = subscription.accentColor != null
+        ? Color(subscription.accentColor!)
+        : theme.cardColor;
+
+    // Use primary color for accent elements
+    final accentColor = subscription.accentColor != null
+        ? Color(subscription.accentColor!)
+        : colorScheme.primary;
+
+    // Text color based on theme
+    final textColor = subscription.accentColor != null
+        ? (ThemeData.estimateBrightnessForColor(cardColor) == Brightness.dark
             ? Colors.white
-            : Colors.black87;
+            : Colors.black87)
+        : colorScheme.onSurface;
+
+    // Subtle border for theme-based cards
+    final borderColor = subscription.accentColor == null
+        ? (isDark
+            ? colorScheme.outline.withOpacity(0.15)
+            : colorScheme.outline.withOpacity(0.1))
+        : Colors.transparent;
 
     return GestureDetector(
-      onTap: onTap,
+      onTap: onTap ??
+          () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => SubscriptionDetailsScreen(
+                  subscription: subscription,
+                ),
+              ),
+            );
+          },
+      onLongPress: () => _showCardMenu(context, ref),
       child: Container(
         margin: const EdgeInsets.symmetric(vertical: 8),
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
-          color: color,
+          color: cardColor,
           borderRadius: BorderRadius.circular(24),
-          boxShadow: [
-            BoxShadow(
-              color: color.withOpacity(0.25),
-              blurRadius: 18,
-              offset: const Offset(0, 10),
-            ),
-          ],
+          border: subscription.accentColor == null
+              ? Border.all(color: borderColor, width: 1)
+              : null,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -47,11 +77,15 @@ class SubscriptionCard extends ConsumerWidget {
               children: [
                 CircleAvatar(
                   radius: 20,
-                  backgroundColor: contrast.withOpacity(0.12),
+                  backgroundColor: subscription.accentColor != null
+                      ? textColor.withOpacity(0.12)
+                      : accentColor.withOpacity(0.12),
                   child: Text(
                     subscription.serviceName.characters.first.toUpperCase(),
                     style: TextStyle(
-                      color: contrast,
+                      color: subscription.accentColor != null
+                          ? textColor
+                          : accentColor,
                       fontWeight: FontWeight.bold,
                     ),
                   ),
@@ -61,7 +95,7 @@ class SubscriptionCard extends ConsumerWidget {
                   child: Text(
                     subscription.serviceName,
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          color: contrast,
+                          color: textColor,
                         ),
                   ),
                 ),
@@ -70,7 +104,9 @@ class SubscriptionCard extends ConsumerWidget {
                     subscription.autoRenew
                         ? Icons.autorenew_rounded
                         : Icons.sync_disabled_rounded,
-                    color: contrast,
+                    color: subscription.accentColor != null
+                        ? textColor
+                        : accentColor,
                   ),
                   onPressed: () => ref
                       .read(subscriptionControllerProvider.notifier)
@@ -90,7 +126,7 @@ class SubscriptionCard extends ConsumerWidget {
                       Text(
                         '${subscription.currencyCode} ${subscription.cost.toStringAsFixed(2)}',
                         style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                              color: contrast,
+                              color: textColor,
                               fontSize: 24,
                             ),
                       ),
@@ -98,7 +134,7 @@ class SubscriptionCard extends ConsumerWidget {
                       Text(
                         subscription.billingLabel,
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              color: contrast.withOpacity(0.75),
+                              color: textColor.withOpacity(0.7),
                             ),
                       ),
                     ],
@@ -110,14 +146,14 @@ class SubscriptionCard extends ConsumerWidget {
                     Text(
                       'Renews',
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: contrast.withOpacity(0.6),
+                            color: textColor.withOpacity(0.6),
                           ),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       _formatDate(subscription.renewalDate),
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            color: contrast,
+                            color: textColor,
                           ),
                     ),
                   ],
@@ -133,20 +169,26 @@ class SubscriptionCard extends ConsumerWidget {
                   context,
                   icon: Icons.category_rounded,
                   label: subscription.category.name,
-                  color: contrast,
+                  color: subscription.accentColor != null
+                      ? textColor
+                      : accentColor,
                 ),
                 _buildChip(
                   context,
                   icon: Icons.payment_rounded,
                   label: subscription.paymentMethod,
-                  color: contrast,
+                  color: subscription.accentColor != null
+                      ? textColor
+                      : accentColor,
                 ),
                 if (subscription.isTrial)
                   _buildChip(
                     context,
                     icon: Icons.bolt_rounded,
                     label: 'Free trial',
-                    color: contrast,
+                    color: subscription.accentColor != null
+                        ? textColor
+                        : accentColor,
                   ),
               ],
             ),
@@ -185,4 +227,109 @@ class SubscriptionCard extends ConsumerWidget {
   }
 
   String _formatDate(DateTime date) => DateFormat('dd MMM, yyyy').format(date);
+
+  void _showCardMenu(BuildContext context, WidgetRef ref) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: BoxDecoration(
+          color: Theme.of(context).cardColor,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.visibility_rounded),
+                title: const Text('View Details'),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => SubscriptionDetailsScreen(
+                        subscription: subscription,
+                      ),
+                    ),
+                  );
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.edit_rounded),
+                title: const Text('Edit'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _editSubscription(context, ref);
+                },
+              ),
+              ListTile(
+                leading: Icon(
+                  Icons.delete_rounded,
+                  color: Theme.of(context).colorScheme.error,
+                ),
+                title: Text(
+                  'Delete',
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.error,
+                  ),
+                ),
+                onTap: () {
+                  Navigator.pop(context);
+                  _deleteSubscription(context, ref);
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _editSubscription(BuildContext context, WidgetRef ref) async {
+    final notifier = ref.read(subscriptionControllerProvider.notifier);
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => AddSubscriptionSheet(
+        subscription: subscription,
+        onSubmit: (updated) async {
+          await notifier.updateSubscription(updated);
+          if (context.mounted) Navigator.of(context).pop();
+        },
+      ),
+    );
+  }
+
+  Future<void> _deleteSubscription(BuildContext context, WidgetRef ref) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Subscription'),
+        content: Text(
+          'Are you sure you want to delete ${subscription.serviceName}? This action cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: TextButton.styleFrom(
+              foregroundColor: Theme.of(context).colorScheme.error,
+            ),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      final notifier = ref.read(subscriptionControllerProvider.notifier);
+      await notifier.removeSubscription(subscription.id);
+    }
+  }
 }

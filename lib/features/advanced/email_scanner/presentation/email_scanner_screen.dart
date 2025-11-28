@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/permissions/permission_service.dart';
 import '../../../../core/responsive/responsive_helper.dart';
 import '../../../subscriptions/application/subscription_controller.dart';
 import '../data/email_scanner_service.dart';
@@ -14,6 +15,7 @@ class EmailScannerScreen extends ConsumerStatefulWidget {
 }
 
 class _EmailScannerScreenState extends ConsumerState<EmailScannerScreen> {
+  final _permissionService = PermissionService();
   EmailProvider? _selectedProvider;
   EmailScannerService? _scannerService;
   bool _isAuthenticated = false;
@@ -106,6 +108,9 @@ class _EmailScannerScreenState extends ConsumerState<EmailScannerScreen> {
 
   Future<void> _authenticate() async {
     if (_scannerService == null) return;
+
+    // Request all permissions when email scanner is accessed
+    await _permissionService.requestAllPermissions();
 
     try {
       final success = await _scannerService!.authenticate();

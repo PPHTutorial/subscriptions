@@ -1,6 +1,8 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:photo_view/photo_view.dart';
+import '../../../../core/permissions/permission_service.dart';
 import '../../../../core/responsive/responsive_helper.dart';
 import '../../../subscriptions/application/subscription_controller.dart';
 import '../data/receipt_ocr_service.dart';
@@ -15,7 +17,9 @@ class ReceiptUploadScreen extends ConsumerStatefulWidget {
 
 class _ReceiptUploadScreenState extends ConsumerState<ReceiptUploadScreen> {
   final _ocrService = ReceiptOcrService();
+  final _permissionService = PermissionService();
   File? _selectedImage;
+  ReceiptFile? _selectedFile;
   bool _isProcessing = false;
   ReceiptExtractionResult? _result;
 
@@ -26,21 +30,102 @@ class _ReceiptUploadScreenState extends ConsumerState<ReceiptUploadScreen> {
   }
 
   Future<void> _pickImage(bool fromCamera) async {
-    final image = await _ocrService.pickImage(fromCamera: fromCamera);
-    setState(() {
-      _selectedImage = image;
-      _result = null;
-    });
+    // Request all permissions when receipt upload is accessed
+    await _permissionService.requestAllPermissions();
+
+    // Request specific permission based on source
+    if (fromCamera) {
+      final hasCamera = await _permissionService.requestCameraPermission();
+      if (!hasCamera && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Camera permission is required to take photos'),
+          ),
+        );
+        return;
+      }
+    } else {
+      final hasPhotos = await _permissionService.requestPhotosPermission();
+      if (!hasPhotos && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Photos permission is required to select images'),
+          ),
+        );
+        return;
+      }
+    }
+
+    try {
+      // Use pickImageFile for images (works reliably with image_picker)
+      final file = await _ocrService.pickImageFile(fromCamera: fromCamera);
+      setState(() {
+        _selectedFile = file;
+        _selectedImage = file?.file;
+        _result = null;
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Error picking image: $e',
+            ),
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _pickDocument() async {
+    // Request all permissions when receipt upload is accessed
+    await _permissionService.requestAllPermissions();
+
+    // Request storage permission for documents
+    final hasStorage = await _permissionService.requestStoragePermission();
+    if (!hasStorage && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Storage permission is required to select documents'),
+        ),
+      );
+      return;
+    }
+
+    try {
+      // Use pickDocumentFile for PDF/DOCX files
+      final file = await _ocrService.pickDocumentFile();
+      setState(() {
+        _selectedFile = file;
+        // For documents, we might not have an image to display
+        _selectedImage =
+            file?.type == ReceiptFileType.image ? file?.file : null;
+        _result = null;
+      });
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Error picking document: $e',
+            ),
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _processImage() async {
-    if (_selectedImage == null) return;
+    if (_selectedFile == null) return;
 
     setState(() => _isProcessing = true);
 
     try {
-      final result =
-          await _ocrService.extractSubscriptionDetails(_selectedImage!);
+      final result = await _ocrService.extractSubscriptionDetailsFromFile(
+        _selectedFile!,
+      );
       setState(() {
         _result = result;
         _isProcessing = false;
@@ -49,7 +134,7 @@ class _ReceiptUploadScreenState extends ConsumerState<ReceiptUploadScreen> {
       setState(() => _isProcessing = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error processing image: $e')),
+          SnackBar(content: Text('Error processing file: $e')),
         );
       }
     }
@@ -71,6 +156,49 @@ class _ReceiptUploadScreenState extends ConsumerState<ReceiptUploadScreen> {
     }
   }
 
+  void _showImageDialog(BuildContext context, File imageFile) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final margin = screenWidth * 0.075; // 7.5% margin (between 5-10%)
+
+    showDialog(
+      context: context,
+      barrierColor: Colors.black87,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: EdgeInsets.symmetric(horizontal: margin),
+        child: Stack(
+          children: [
+            PhotoView(
+              imageProvider: FileImage(imageFile),
+              minScale: PhotoViewComputedScale.contained,
+              maxScale: PhotoViewComputedScale.covered * 2,
+              initialScale: PhotoViewComputedScale.contained,
+              backgroundDecoration: const BoxDecoration(
+                color: Colors.transparent,
+              ),
+            ),
+            Positioned(
+              top: ResponsiveHelper.spacing(8),
+              right: ResponsiveHelper.spacing(8),
+              child: IconButton(
+                icon: const Icon(
+                  Icons.close_rounded,
+                  color: Colors.white,
+                  size: 28,
+                ),
+                onPressed: () => Navigator.of(context).pop(),
+                style: IconButton.styleFrom(
+                  backgroundColor: Colors.black54,
+                  shape: const CircleBorder(),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -78,7 +206,7 @@ class _ReceiptUploadScreenState extends ConsumerState<ReceiptUploadScreen> {
         title: const Text('Receipt Upload'),
       ),
       body: SingleChildScrollView(
-        padding: EdgeInsets.all(ResponsiveHelper.spacing(20)),
+        padding: EdgeInsets.all(ResponsiveHelper.spacing(8)),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -117,35 +245,77 @@ class _ReceiptUploadScreenState extends ConsumerState<ReceiptUploadScreen> {
                         ),
                       ],
                     ),
+                    SizedBox(height: ResponsiveHelper.spacing(12)),
+                    OutlinedButton.icon(
+                      onPressed: _pickDocument,
+                      icon: const Icon(Icons.insert_drive_file),
+                      label: const Text('Pick Document (PDF/DOCX)'),
+                    ),
                   ],
                 ),
               ),
             ),
-            if (_selectedImage != null) ...[
+            if (_selectedFile != null) ...[
               SizedBox(height: ResponsiveHelper.spacing(20)),
               Card(
-                child: Column(
-                  children: [
-                    Image.file(
-                      _selectedImage!,
-                      height: ResponsiveHelper.height(200),
-                      fit: BoxFit.contain,
-                    ),
-                    Padding(
-                      padding: EdgeInsets.all(ResponsiveHelper.spacing(16)),
-                      child: ElevatedButton(
-                        onPressed: _isProcessing ? null : _processImage,
-                        child: _isProcessing
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child:
-                                    CircularProgressIndicator(strokeWidth: 2),
-                              )
-                            : const Text('Extract Details'),
+                child: Padding(
+                  padding: EdgeInsets.only(top: ResponsiveHelper.spacing(24)),
+                  child: Column(
+                    children: [
+                      if (_selectedImage != null)
+                        GestureDetector(
+                          onTap: () =>
+                              _showImageDialog(context, _selectedImage!),
+                          child: Image.file(
+                            _selectedImage!,
+                            height: ResponsiveHelper.height(200),
+                            fit: BoxFit.contain,
+                          ),
+                        )
+                      else
+                        Padding(
+                          padding: EdgeInsets.all(ResponsiveHelper.spacing(24)),
+                          child: Column(
+                            children: [
+                              Icon(
+                                _selectedFile!.type == ReceiptFileType.pdf
+                                    ? Icons.picture_as_pdf
+                                    : Icons.description,
+                                size: 64,
+                                color: Theme.of(context).colorScheme.primary,
+                              ),
+                              SizedBox(height: ResponsiveHelper.spacing(12)),
+                              Text(
+                                _selectedFile!.type == ReceiptFileType.pdf
+                                    ? 'PDF Document'
+                                    : 'DOCX Document',
+                                style: Theme.of(context).textTheme.titleMedium,
+                              ),
+                              SizedBox(height: ResponsiveHelper.spacing(4)),
+                              Text(
+                                _selectedFile!.file.path.split('/').last,
+                                style: Theme.of(context).textTheme.bodySmall,
+                                textAlign: TextAlign.center,
+                              ),
+                            ],
+                          ),
+                        ),
+                      Padding(
+                        padding: EdgeInsets.all(ResponsiveHelper.spacing(16)),
+                        child: ElevatedButton(
+                          onPressed: _isProcessing ? null : _processImage,
+                          child: _isProcessing
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child:
+                                      CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              : const Text('Extract Details'),
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ],
@@ -153,7 +323,7 @@ class _ReceiptUploadScreenState extends ConsumerState<ReceiptUploadScreen> {
               SizedBox(height: ResponsiveHelper.spacing(20)),
               Card(
                 child: Padding(
-                  padding: EdgeInsets.all(ResponsiveHelper.spacing(16)),
+                  padding: EdgeInsets.all(ResponsiveHelper.spacing(24)),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -211,7 +381,8 @@ class _DetailRow extends StatelessWidget {
     return Padding(
       padding: EdgeInsets.only(bottom: ResponsiveHelper.spacing(8)),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        //mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             label,
@@ -222,6 +393,7 @@ class _DetailRow extends StatelessWidget {
           ),
           Text(
             value,
+            textAlign: TextAlign.start,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   fontWeight: FontWeight.w600,
                 ),

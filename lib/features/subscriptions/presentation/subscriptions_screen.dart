@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/ads/banner_ad_widget.dart';
+import '../../../../core/ads/native_ad_widget.dart';
 import '../../../../core/responsive/responsive_helper.dart';
 import '../application/subscription_controller.dart';
 import '../domain/subscription.dart';
@@ -72,18 +73,42 @@ class _SubscriptionsScreenState extends ConsumerState<SubscriptionsScreen> {
                               ResponsiveHelper.spacing(20),
                               ResponsiveHelper.spacing(12),
                               ResponsiveHelper.spacing(20),
-                              ResponsiveHelper.spacing(12),
+                              // Add bottom padding to account for bottom nav bar + safe area
+                              ResponsiveHelper.spacing(12) +
+                                  ResponsiveHelper.safeAreaBottom(context) +
+                                  80, // Bottom nav bar height
                             ),
-                            itemCount: filtered.length,
+                            itemCount: filtered.length +
+                                (filtered.length > 0
+                                    ? (filtered.length ~/ 5)
+                                    : 0),
                             itemBuilder: (context, index) {
+                              // Show native ad every 5 items
+                              if (index > 0 && index % 5 == 0) {
+                                return Column(
+                                  children: [
+                                    const NativeAdWidget(),
+                                    SubscriptionCard(
+                                      subscription:
+                                          filtered[index - (index ~/ 5)],
+                                    ),
+                                  ],
+                                );
+                              }
+                              // Adjust index for native ads
+                              final adjustedIndex = index - (index ~/ 5);
+                              if (adjustedIndex >= filtered.length) {
+                                return const SizedBox.shrink();
+                              }
                               return SubscriptionCard(
-                                subscription: filtered[index],
+                                subscription: filtered[adjustedIndex],
                               );
                             },
                           ),
                         ),
                         const BannerAdWidget(),
-                        const SizedBox(height: 80),
+                        SizedBox(
+                            height: ResponsiveHelper.safeAreaBottom(context)),
                       ],
                     ),
             ),
