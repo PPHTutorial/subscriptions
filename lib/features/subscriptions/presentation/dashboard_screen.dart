@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../../../core/ads/banner_ad_widget.dart';
 import '../application/subscription_controller.dart';
 import '../domain/subscription.dart';
+import 'widgets/analytics_section.dart';
 import 'widgets/insight_card.dart';
 import 'widgets/subscription_card.dart';
 
@@ -25,8 +27,9 @@ class DashboardScreen extends ConsumerWidget {
         final monthlySpend = _calculateMonthlySpend(subscriptions);
         final trialCount = subscriptions.where((s) => s.isTrial).length;
         final upcoming = _upcomingRenewals(subscriptions);
-        final inactive =
-            subscriptions.where((s) => s.autoRenew == false).length;
+        final topExpensive = _getTopExpensive(subscriptions);
+        final paidSubscriptions = subscriptions.where((s) => !s.isTrial).length;
+        final trialSubscriptions = subscriptions.where((s) => s.isTrial).length;
 
         return CustomScrollView(
           slivers: [
@@ -58,37 +61,50 @@ class DashboardScreen extends ConsumerWidget {
                           value: '${upcoming.length}',
                           subtitle: 'Next 30 days',
                           icon: Icons.event_available_rounded,
-                          gradient: const [
-                            Color(0xFF25D9B5),
-                            Color(0xFF1FB99B),
+                          gradient: [
+                            Theme.of(context).colorScheme.secondary,
+                            Theme.of(context).colorScheme.tertiary,
                           ],
                         ),
                         InsightCard(
                           title: 'Trials live',
                           value: '$trialCount',
-                          subtitle: 'Don’t miss cancellations',
+                          subtitle: '$trialSubscriptions total',
                           icon: Icons.flash_on_rounded,
-                          gradient: const [
-                            Color(0xFFFF7A8A),
-                            Color(0xFFF15D70),
+                          gradient: [
+                            Theme.of(context).colorScheme.tertiary,
+                            Theme.of(context).colorScheme.primary,
                           ],
                         ),
                         InsightCard(
-                          title: 'Manual payments',
-                          value: '$inactive',
-                          subtitle: 'Need hands-on renewals',
-                          icon: Icons.handshake_rounded,
-                          gradient: const [
-                            Color(0xFF3AA9FF),
-                            Color(0xFF2F82F4),
+                          title: 'Paid subs',
+                          value: '$paidSubscriptions',
+                          subtitle: 'Active subscriptions',
+                          icon: Icons.credit_card_rounded,
+                          gradient: [
+                            Theme.of(context).colorScheme.primary,
+                            Theme.of(context).colorScheme.secondary,
                           ],
                         ),
                       ],
                     ),
                     const SizedBox(height: 32),
-                    Text(
-                      'Upcoming renewals',
-                      style: Theme.of(context).textTheme.titleLarge,
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Upcoming renewals',
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
+                        if (topExpensive.isNotEmpty)
+                          TextButton.icon(
+                            onPressed: () =>
+                                _showTopExpensive(context, topExpensive),
+                            icon:
+                                const Icon(Icons.trending_up_rounded, size: 18),
+                            label: const Text('Top 5'),
+                          ),
+                      ],
                     ),
                     const SizedBox(height: 12),
                     ...upcoming.map(
@@ -97,6 +113,8 @@ class DashboardScreen extends ConsumerWidget {
                         onTap: onAddTap,
                       ),
                     ),
+                    const SizedBox(height: 24),
+                    AnalyticsSection(subscriptions: subscriptions),
                     const SizedBox(height: 24),
                     Text(
                       'All subscriptions',
@@ -122,6 +140,12 @@ class DashboardScreen extends ConsumerWidget {
                   );
                 },
                 childCount: subscriptions.length,
+              ),
+            ),
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                child: const BannerAdWidget(),
               ),
             ),
           ],
@@ -173,6 +197,60 @@ class DashboardScreen extends ConsumerWidget {
     upcoming.sort((a, b) => a.renewalDate.compareTo(b.renewalDate));
     return upcoming.take(4).toList();
   }
+
+  List<Subscription> _getTopExpensive(List<Subscription> subscriptions) {
+    final sorted = List<Subscription>.from(subscriptions)
+      ..sort((a, b) => b.cost.compareTo(a.cost));
+    return sorted.take(5).toList();
+  }
+
+  void _showTopExpensive(
+      BuildContext context, List<Subscription> topExpensive) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: Theme.of(context).cardColor,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Top 5 Expensive Subscriptions',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 16),
+            ...topExpensive.map((sub) => Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          sub.serviceName,
+                          style: Theme.of(context).textTheme.bodyLarge,
+                        ),
+                      ),
+                      Text(
+                        '${sub.currencyCode} ${sub.cost.toStringAsFixed(2)}',
+                        style:
+                            Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  color: Theme.of(context).colorScheme.primary,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                      ),
+                    ],
+                  ),
+                )),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _EmptyState extends StatelessWidget {
@@ -205,7 +283,8 @@ class _EmptyState extends StatelessWidget {
           Text(
             'Add your first plan to see spending insights, timelines, and reminders for ${formatter.format(DateTime.now())}.',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Colors.black54,
+                  color:
+                      Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
                 ),
             textAlign: TextAlign.center,
           ),

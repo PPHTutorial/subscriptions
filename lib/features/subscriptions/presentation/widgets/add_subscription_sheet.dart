@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../../core/responsive/responsive_helper.dart';
 import '../../domain/subscription.dart';
 
 class AddSubscriptionSheet extends StatefulWidget {
@@ -49,10 +50,17 @@ class _AddSubscriptionSheetState extends State<AddSubscriptionSheet> {
     return Padding(
       padding: EdgeInsets.only(bottom: bottomPadding),
       child: Container(
-        padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+        padding: EdgeInsets.fromLTRB(
+          ResponsiveHelper.spacing(24),
+          ResponsiveHelper.spacing(16),
+          ResponsiveHelper.spacing(24),
+          ResponsiveHelper.spacing(24),
+        ),
+        decoration: BoxDecoration(
+          color: Theme.of(context).cardColor,
+          borderRadius: BorderRadius.vertical(
+            top: Radius.circular(ResponsiveHelper.spacing(32)),
+          ),
         ),
         child: SafeArea(
           top: false,
@@ -64,12 +72,17 @@ class _AddSubscriptionSheetState extends State<AddSubscriptionSheet> {
                 children: [
                   Center(
                     child: Container(
-                      width: 64,
-                      height: 5,
-                      margin: const EdgeInsets.only(bottom: 18),
+                      width: ResponsiveHelper.width(64),
+                      height: ResponsiveHelper.height(5),
+                      margin:
+                          EdgeInsets.only(bottom: ResponsiveHelper.spacing(18)),
                       decoration: BoxDecoration(
-                        color: Colors.black12,
-                        borderRadius: BorderRadius.circular(4),
+                        color: Theme.of(context)
+                            .colorScheme
+                            .onSurface
+                            .withOpacity(0.2),
+                        borderRadius:
+                            BorderRadius.circular(ResponsiveHelper.spacing(4)),
                       ),
                     ),
                   ),
@@ -77,7 +90,7 @@ class _AddSubscriptionSheetState extends State<AddSubscriptionSheet> {
                     'Add subscription',
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
-                  const SizedBox(height: 18),
+                  SizedBox(height: ResponsiveHelper.spacing(18)),
                   TextFormField(
                     controller: _serviceController,
                     textCapitalization: TextCapitalization.words,
@@ -89,7 +102,7 @@ class _AddSubscriptionSheetState extends State<AddSubscriptionSheet> {
                         ? 'Required'
                         : null,
                   ),
-                  const SizedBox(height: 14),
+                  SizedBox(height: ResponsiveHelper.spacing(14)),
                   Row(
                     children: [
                       Expanded(
@@ -111,7 +124,7 @@ class _AddSubscriptionSheetState extends State<AddSubscriptionSheet> {
                           },
                         ),
                       ),
-                      const SizedBox(width: 12),
+                      SizedBox(width: ResponsiveHelper.spacing(12)),
                       Expanded(
                         child: DropdownButtonFormField<String>(
                           value: _currency,
@@ -132,12 +145,12 @@ class _AddSubscriptionSheetState extends State<AddSubscriptionSheet> {
                       ),
                     ],
                   ),
-                  const SizedBox(height: 14),
+                  SizedBox(height: ResponsiveHelper.spacing(14)),
                   _SectionLabel(
                     title: 'Billing cadence',
                     child: Wrap(
-                      spacing: 10,
-                      runSpacing: 10,
+                      spacing: ResponsiveHelper.spacing(10),
+                      runSpacing: ResponsiveHelper.spacing(10),
                       children: BillingCycle.values
                           .map(
                             (cycle) => ChoiceChip(
@@ -150,7 +163,7 @@ class _AddSubscriptionSheetState extends State<AddSubscriptionSheet> {
                           .toList(),
                     ),
                   ),
-                  const SizedBox(height: 14),
+                  SizedBox(height: ResponsiveHelper.spacing(14)),
                   OutlinedButton.icon(
                     onPressed: () async {
                       final now = DateTime.now();
@@ -178,9 +191,11 @@ class _AddSubscriptionSheetState extends State<AddSubscriptionSheet> {
                       }
                     },
                     style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      padding: EdgeInsets.symmetric(
+                          vertical: ResponsiveHelper.spacing(16)),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(20),
+                        borderRadius:
+                            BorderRadius.circular(ResponsiveHelper.spacing(20)),
                       ),
                     ),
                     icon: const Icon(Icons.event_rounded),
@@ -190,7 +205,7 @@ class _AddSubscriptionSheetState extends State<AddSubscriptionSheet> {
                           : 'Renews ${_renewalDate!.toLocal().toString().split(' ').first}',
                     ),
                   ),
-                  const SizedBox(height: 14),
+                  SizedBox(height: ResponsiveHelper.spacing(14)),
                   DropdownButtonFormField<SubscriptionCategory>(
                     value: _category,
                     decoration: const InputDecoration(labelText: 'Category'),
@@ -205,7 +220,7 @@ class _AddSubscriptionSheetState extends State<AddSubscriptionSheet> {
                     onChanged: (value) =>
                         setState(() => _category = value ?? _category),
                   ),
-                  const SizedBox(height: 14),
+                  SizedBox(height: ResponsiveHelper.spacing(14)),
                   TextFormField(
                     controller: _paymentController,
                     decoration: const InputDecoration(
@@ -213,7 +228,7 @@ class _AddSubscriptionSheetState extends State<AddSubscriptionSheet> {
                       hintText: 'Visa, Apple Pay, Mobile Money...',
                     ),
                   ),
-                  const SizedBox(height: 14),
+                  SizedBox(height: ResponsiveHelper.spacing(14)),
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
                     title: const Text('Auto-renew enabled'),
@@ -232,7 +247,7 @@ class _AddSubscriptionSheetState extends State<AddSubscriptionSheet> {
                     }),
                   ),
                   if (_isTrial) ...[
-                    const SizedBox(height: 10),
+                    SizedBox(height: ResponsiveHelper.spacing(10)),
                     OutlinedButton.icon(
                       onPressed: () async {
                         final now = DateTime.now();
@@ -255,15 +270,15 @@ class _AddSubscriptionSheetState extends State<AddSubscriptionSheet> {
                       ),
                     ),
                   ],
-                  const SizedBox(height: 14),
+                  SizedBox(height: ResponsiveHelper.spacing(14)),
                   _SectionLabel(
                     title: 'Reminders',
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Wrap(
-                          spacing: 10,
-                          runSpacing: 10,
+                          spacing: ResponsiveHelper.spacing(10),
+                          runSpacing: ResponsiveHelper.spacing(10),
                           children: [7, 3, 1, 0].map((day) {
                             final selected = _reminderDays.contains(day);
                             return FilterChip(
@@ -282,7 +297,7 @@ class _AddSubscriptionSheetState extends State<AddSubscriptionSheet> {
                             );
                           }).toList(),
                         ),
-                        const SizedBox(height: 12),
+                        SizedBox(height: ResponsiveHelper.spacing(12)),
                         TextFormField(
                           controller: _customReminderController,
                           keyboardType: TextInputType.number,
@@ -297,7 +312,7 @@ class _AddSubscriptionSheetState extends State<AddSubscriptionSheet> {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 14),
+                  SizedBox(height: ResponsiveHelper.spacing(14)),
                   TextFormField(
                     controller: _notesController,
                     minLines: 2,
@@ -308,14 +323,15 @@ class _AddSubscriptionSheetState extends State<AddSubscriptionSheet> {
                           'Add context, cancellation policy, login info...',
                     ),
                   ),
-                  const SizedBox(height: 24),
+                  SizedBox(height: ResponsiveHelper.spacing(24)),
                   ElevatedButton(
                     onPressed: _isSaving ? null : _submit,
                     child: _isSaving
-                        ? const SizedBox(
-                            width: 24,
-                            height: 24,
-                            child: CircularProgressIndicator(strokeWidth: 2),
+                        ? SizedBox(
+                            width: ResponsiveHelper.width(24),
+                            height: ResponsiveHelper.height(24),
+                            child:
+                                const CircularProgressIndicator(strokeWidth: 2),
                           )
                         : const Text('Save subscription'),
                   ),
@@ -401,7 +417,7 @@ class _SectionLabel extends StatelessWidget {
           title,
           style: Theme.of(context).textTheme.titleMedium,
         ),
-        const SizedBox(height: 12),
+        SizedBox(height: ResponsiveHelper.spacing(12)),
         child,
       ],
     );

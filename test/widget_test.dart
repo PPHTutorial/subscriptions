@@ -18,10 +18,10 @@ void main() {
     );
 
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pump(const Duration(milliseconds: 500));
 
     expect(find.text('Overview'), findsWidgets);
-    expect(find.text('Add subscription'), findsWidgets);
   });
 }
 

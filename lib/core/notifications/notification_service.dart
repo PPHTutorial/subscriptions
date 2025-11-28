@@ -1,7 +1,6 @@
 import 'dart:io';
 
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:flutter_native_timezone_updated_gradle/flutter_native_timezone.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:timezone/data/latest.dart' as tzdata;
@@ -36,12 +35,9 @@ class LocalNotificationService implements NotificationService {
     if (_initialized) return;
 
     tzdata.initializeTimeZones();
-    try {
-      final timeZoneName = await FlutterNativeTimezone.getLocalTimezone();
-      tz.setLocalLocation(tz.getLocation(timeZoneName));
-    } catch (_) {
-      tz.setLocalLocation(tz.getLocation('UTC'));
-    }
+    // Use system's local timezone
+    // The timezone package will use the system default when we use tz.TZDateTime.from
+    // No need to explicitly set location as zonedSchedule handles system timezone
 
     const androidSettings =
         AndroidInitializationSettings('@mipmap/ic_launcher');

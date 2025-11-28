@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/notifications/notification_service.dart';
+import '../../settings/presentation/settings_screen.dart';
 import '../application/subscription_controller.dart';
+import '../presentation/widgets/sort_filter_bar.dart';
 import 'dashboard_screen.dart';
 import 'subscriptions_screen.dart';
 import 'widgets/add_subscription_sheet.dart';
@@ -16,6 +18,8 @@ class HomeShell extends ConsumerStatefulWidget {
 
 class _HomeShellState extends ConsumerState<HomeShell> {
   int _index = 0;
+  SortOption _sortOption = SortOption.renewalDate;
+  bool _showTrialsOnly = false;
 
   @override
   void initState() {
@@ -29,16 +33,97 @@ class _HomeShellState extends ConsumerState<HomeShell> {
   Widget build(BuildContext context) {
     final tabs = [
       DashboardScreen(onAddTap: _openCreateSheet),
-      SubscriptionsScreen(onAddTap: _openCreateSheet),
+      SubscriptionsScreen(
+        onAddTap: _openCreateSheet,
+        sortOption: _sortOption,
+        onSortChanged: (option) => setState(() => _sortOption = option),
+        showTrialsOnly: _showTrialsOnly,
+        onTrialsFilterChanged: (value) =>
+            setState(() => _showTrialsOnly = value),
+      ),
+      const SettingsScreen(),
     ];
 
-    final titles = ['Overview', 'Subscriptions'];
+    final titles = ['Overview', 'Subscriptions', 'Settings'];
 
     return Scaffold(
       extendBody: true,
       appBar: AppBar(
         title: Text(titles[_index]),
         actions: [
+          if (_index == 1) ...[
+            // Sort menu for subscriptions screen
+            PopupMenuButton<SortOption>(
+              icon: const Icon(Icons.sort_rounded),
+              tooltip: 'Sort',
+              initialValue: _sortOption,
+              onSelected: (option) => setState(() => _sortOption = option),
+              itemBuilder: (context) => [
+                const PopupMenuItem(
+                  value: SortOption.renewalDate,
+                  child: Row(
+                    children: [
+                      Icon(Icons.event_rounded, size: 18),
+                      SizedBox(width: 8),
+                      Text('Renewal date'),
+                    ],
+                  ),
+                ),
+                const PopupMenuItem(
+                  value: SortOption.price,
+                  child: Row(
+                    children: [
+                      Icon(Icons.attach_money_rounded, size: 18),
+                      SizedBox(width: 8),
+                      Text('Price'),
+                    ],
+                  ),
+                ),
+                const PopupMenuItem(
+                  value: SortOption.category,
+                  child: Row(
+                    children: [
+                      Icon(Icons.category_rounded, size: 18),
+                      SizedBox(width: 8),
+                      Text('Category'),
+                    ],
+                  ),
+                ),
+                const PopupMenuItem(
+                  value: SortOption.name,
+                  child: Row(
+                    children: [
+                      Icon(Icons.sort_by_alpha_rounded, size: 18),
+                      SizedBox(width: 8),
+                      Text('Name'),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            // Filter menu for subscriptions screen
+            PopupMenuButton(
+              icon: const Icon(Icons.filter_list_rounded),
+              tooltip: 'Filter',
+              itemBuilder: (context) => [
+                PopupMenuItem(
+                  child: StatefulBuilder(
+                    builder: (context, setState) => CheckboxListTile(
+                      title: const Text('Trials only'),
+                      value: _showTrialsOnly,
+                      onChanged: (value) {
+                        setState(() => _showTrialsOnly = value ?? false);
+                        this.setState(() {});
+                        Navigator.pop(context);
+                      },
+                      controlAffinity: ListTileControlAffinity.leading,
+                      contentPadding: EdgeInsets.zero,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
           IconButton(
             icon: const Icon(Icons.add_alert_rounded),
             tooltip: 'Add subscription',
@@ -51,19 +136,22 @@ class _HomeShellState extends ConsumerState<HomeShell> {
         child: tabs[_index],
       ),
       bottomNavigationBar: _buildNavBar(context),
-      floatingActionButton: FloatingActionButton.extended(
+      /* floatingActionButton: FloatingActionButton.extended(
         onPressed: _openCreateSheet,
         icon: const Icon(Icons.add),
         label: const Text('Add subscription'),
       ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked, */
     );
   }
 
   Widget _buildNavBar(BuildContext context) {
+    final theme = Theme.of(context);
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.95),
+        color:
+            theme.bottomNavigationBarTheme.backgroundColor?.withOpacity(0.95) ??
+                Colors.white.withOpacity(0.95),
         borderRadius: const BorderRadius.only(
           topLeft: Radius.circular(24),
           topRight: Radius.circular(24),
@@ -90,6 +178,10 @@ class _HomeShellState extends ConsumerState<HomeShell> {
             icon: Icon(Icons.credit_card_rounded),
             label: 'Subscriptions',
           ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.settings_rounded),
+            label: 'Settings',
+          ),
         ],
       ),
     );
@@ -111,4 +203,3 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     );
   }
 }
-

@@ -1,0 +1,161 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../core/config/app_config.dart';
+import '../../../core/responsive/responsive_helper.dart';
+import '../email_scanner/presentation/email_scanner_screen.dart';
+import '../sms_scanner/presentation/sms_scanner_screen.dart';
+import '../receipt_ocr/presentation/receipt_upload_screen.dart';
+import '../cloud_sync/presentation/cloud_sync_screen.dart';
+import '../ai_insights/presentation/ai_insights_screen.dart';
+
+class AdvancedFeaturesSection extends ConsumerWidget {
+  const AdvancedFeaturesSection({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Card(
+      margin: EdgeInsets.all(ResponsiveHelper.spacing(20)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: EdgeInsets.all(ResponsiveHelper.spacing(16)),
+            child: Text(
+              'Advanced Features',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+          ),
+          const Divider(height: 1),
+          _FeatureTile(
+            icon: Icons.email_rounded,
+            title: 'Email Scanner',
+            subtitle: 'Automatically detect subscriptions from emails',
+            enabled: AppConfig.enableEmailScanner,
+            configured: AppConfig.isVercelProxyConfigured,
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const EmailScannerScreen(),
+                ),
+              );
+            },
+          ),
+          _FeatureTile(
+            icon: Icons.sms_rounded,
+            title: 'SMS Scanner',
+            subtitle: 'Scan bank alerts for subscription transactions',
+            enabled: AppConfig.enableSmsScanner,
+            configured: true, // SMS doesn't need API keys
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const SmsScannerScreen(),
+                ),
+              );
+            },
+          ),
+          _FeatureTile(
+            icon: Icons.receipt_long_rounded,
+            title: 'Receipt Upload',
+            subtitle: 'Extract details from receipt images using OCR',
+            enabled: AppConfig.enableReceiptUpload,
+            configured: true, // OCR uses Google ML Kit (no API key needed)
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const ReceiptUploadScreen(),
+                ),
+              );
+            },
+          ),
+          _FeatureTile(
+            icon: Icons.cloud_sync_rounded,
+            title: 'Cloud Sync',
+            subtitle: 'Sync subscriptions across devices',
+            enabled: AppConfig.enableCloudSync,
+            configured: AppConfig.isFirebaseConfigured,
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const CloudSyncScreen(),
+                ),
+              );
+            },
+          ),
+          _FeatureTile(
+            icon: Icons.psychology_rounded,
+            title: 'AI Insights',
+            subtitle: 'Get smart recommendations and waste predictions',
+            enabled: AppConfig.enableAiInsights,
+            configured: true, // Uses local logic, no API keys needed
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const AiInsightsScreen(),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _FeatureTile extends StatelessWidget {
+  const _FeatureTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.enabled,
+    required this.configured,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final bool enabled;
+  final bool configured;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      leading: Icon(
+        icon,
+        color: enabled && configured
+            ? Theme.of(context).colorScheme.primary
+            : Theme.of(context).colorScheme.onSurface.withOpacity(0.3),
+      ),
+      title: Text(title),
+      subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(subtitle),
+          if (!configured)
+            Padding(
+              padding: EdgeInsets.only(top: ResponsiveHelper.spacing(4)),
+              child: Text(
+                'API keys not configured',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.tertiary,
+                    ),
+              ),
+            ),
+        ],
+      ),
+      trailing: Icon(
+        Icons.chevron_right_rounded,
+        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.3),
+      ),
+      enabled: enabled && configured,
+      onTap: enabled && configured ? onTap : null,
+    );
+  }
+}

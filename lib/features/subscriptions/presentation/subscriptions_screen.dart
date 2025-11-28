@@ -1,14 +1,28 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/ads/banner_ad_widget.dart';
+import '../../../../core/responsive/responsive_helper.dart';
 import '../application/subscription_controller.dart';
 import '../domain/subscription.dart';
+import 'widgets/sort_filter_bar.dart';
 import 'widgets/subscription_card.dart';
 
 class SubscriptionsScreen extends ConsumerStatefulWidget {
-  const SubscriptionsScreen({super.key, required this.onAddTap});
+  const SubscriptionsScreen({
+    super.key,
+    required this.onAddTap,
+    required this.sortOption,
+    required this.onSortChanged,
+    required this.showTrialsOnly,
+    required this.onTrialsFilterChanged,
+  });
 
   final VoidCallback onAddTap;
+  final SortOption sortOption;
+  final ValueChanged<SortOption> onSortChanged;
+  final bool showTrialsOnly;
+  final ValueChanged<bool> onTrialsFilterChanged;
 
   @override
   ConsumerState<SubscriptionsScreen> createState() =>
@@ -32,26 +46,45 @@ class _SubscriptionsScreenState extends ConsumerState<SubscriptionsScreen> {
 
     return subscriptions.when(
       data: (items) {
-        final filtered = _applyFilters(items);
+        var filtered = _applyFilters(items);
+        filtered = sortSubscriptions(filtered, widget.sortOption);
         return Column(
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+              padding: EdgeInsets.fromLTRB(
+                ResponsiveHelper.spacing(20),
+                ResponsiveHelper.spacing(16),
+                ResponsiveHelper.spacing(20),
+                0,
+              ),
               child: _buildSearchField(),
             ),
             _buildCategoryChips(),
             Expanded(
               child: filtered.isEmpty
                   ? _EmptyListState(onAddTap: widget.onAddTap)
-                  : ListView.builder(
-                      controller: _scrollController,
-                      padding: const EdgeInsets.fromLTRB(20, 12, 20, 120),
-                      itemCount: filtered.length,
-                      itemBuilder: (context, index) {
-                        return SubscriptionCard(
-                          subscription: filtered[index],
-                        );
-                      },
+                  : Column(
+                      children: [
+                        Expanded(
+                          child: ListView.builder(
+                            controller: _scrollController,
+                            padding: EdgeInsets.fromLTRB(
+                              ResponsiveHelper.spacing(20),
+                              ResponsiveHelper.spacing(12),
+                              ResponsiveHelper.spacing(20),
+                              ResponsiveHelper.spacing(12),
+                            ),
+                            itemCount: filtered.length,
+                            itemBuilder: (context, index) {
+                              return SubscriptionCard(
+                                subscription: filtered[index],
+                              );
+                            },
+                          ),
+                        ),
+                        const BannerAdWidget(),
+                        const SizedBox(height: 80),
+                      ],
                     ),
             ),
           ],
@@ -74,10 +107,13 @@ class _SubscriptionsScreenState extends ConsumerState<SubscriptionsScreen> {
 
   Widget _buildCategoryChips() {
     return SizedBox(
-      height: 52,
+      height: ResponsiveHelper.spacing(60),
       child: ListView(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        padding: EdgeInsets.symmetric(
+          horizontal: ResponsiveHelper.spacing(16),
+          vertical: ResponsiveHelper.spacing(12),
+        ),
         children: [
           ChoiceChip(
             label: const Text('All'),
@@ -86,7 +122,9 @@ class _SubscriptionsScreenState extends ConsumerState<SubscriptionsScreen> {
           ),
           ...SubscriptionCategory.values.map(
             (category) => Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 6),
+              padding: EdgeInsets.symmetric(
+                horizontal: ResponsiveHelper.spacing(6),
+              ),
               child: ChoiceChip(
                 label: Text(category.name),
                 selected: _filterCategory == category,
@@ -112,7 +150,9 @@ class _SubscriptionsScreenState extends ConsumerState<SubscriptionsScreen> {
       final matchesCategory =
           _filterCategory == null || subscription.category == _filterCategory;
 
-      return matchesSearch && matchesCategory;
+      final matchesTrialFilter = !widget.showTrialsOnly || subscription.isTrial;
+
+      return matchesSearch && matchesCategory && matchesTrialFilter;
     }).toList();
   }
 }
@@ -126,7 +166,9 @@ class _EmptyListState extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 32),
+        padding: EdgeInsets.symmetric(
+          horizontal: ResponsiveHelper.spacing(32),
+        ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -145,7 +187,10 @@ class _EmptyListState extends StatelessWidget {
               'Capture streaming, productivity, finance, and lifestyle subscriptions. Everything stays offline.',
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Colors.black54,
+                    color: Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withOpacity(0.6),
                   ),
             ),
             const SizedBox(height: 18),
@@ -160,4 +205,3 @@ class _EmptyListState extends StatelessWidget {
     );
   }
 }
-
