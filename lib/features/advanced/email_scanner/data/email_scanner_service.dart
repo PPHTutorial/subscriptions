@@ -5,23 +5,54 @@ import '../../../../core/services/vercel_proxy_service.dart';
 import '../domain/email_provider.dart';
 import '../domain/email_subscription_match.dart';
 import '../../../subscriptions/domain/subscription.dart';
+import 'imap_email_scanner_service.dart';
 
 /// Service for scanning emails to detect subscriptions
+/// Uses IMAP/POP3 for local access - no OAuth client ID required
+/// Works with any email provider that supports IMAP/POP3
 class EmailScannerService {
   final EmailProvider provider;
+  ImapEmailScannerService? _imapService;
   String? _accessToken;
   String? _refreshToken;
+  bool _useImap = true; // Default to IMAP for local access
 
-  EmailScannerService(this.provider);
+  EmailScannerService(this.provider) {
+    _imapService = ImapEmailScannerService(provider);
+  }
+
+  /// Set email credentials for IMAP connection
+  /// This is the preferred method - works locally without OAuth
+  void setCredentials({
+    required String email,
+    required String password,
+    String? customImapServer,
+    int? customImapPort,
+    bool? useSsl,
+  }) {
+    _imapService?.setCredentials(
+      email: email,
+      password: password,
+      customImapServer: customImapServer,
+      customImapPort: customImapPort,
+      useSsl: useSsl,
+    );
+  }
 
   /// Authenticate with email provider
+  /// Uses IMAP by default for local access
   Future<bool> authenticate() async {
     try {
-      switch (provider) {
-        case EmailProvider.gmail:
-          return await _authenticateGmail();
-        case EmailProvider.outlook:
-          return await _authenticateOutlook();
+      if (_useImap && _imapService != null) {
+        return await _imapService!.connect();
+      } else {
+        // Fallback to OAuth (requires Vercel proxy)
+        switch (provider) {
+          case EmailProvider.gmail:
+            return await _authenticateGmail();
+          case EmailProvider.outlook:
+            return await _authenticateOutlook();
+        }
       }
     } catch (e) {
       return false;
@@ -30,53 +61,57 @@ class EmailScannerService {
 
   Future<bool> _authenticateGmail() async {
     if (!AppConfig.isVercelProxyConfigured) {
-      throw Exception('Vercel proxy not configured');
+      throw Exception('Vercel proxy not configured. Use IMAP instead.');
     }
 
-    // OAuth flow will be handled through Vercel proxy
-    // 1. Request OAuth URL from proxy
-    // 2. User authorizes in browser
-    // 3. Proxy exchanges code for token and returns to client
-    // For now, return false to indicate not configured
-    // TODO: Implement OAuth flow with Vercel proxy
+    // OAuth flow - only used if IMAP is not available
+    // For production, prefer IMAP for scalability
     return false;
   }
 
   Future<bool> _authenticateOutlook() async {
     if (!AppConfig.isVercelProxyConfigured) {
-      throw Exception('Vercel proxy not configured');
+      throw Exception('Vercel proxy not configured. Use IMAP instead.');
     }
 
-    // OAuth flow will be handled through Vercel proxy
-    // 1. Request OAuth URL from proxy
-    // 2. User authorizes in browser
-    // 3. Proxy exchanges code for token and returns to client
-    // For now, return false to indicate not configured
-    // TODO: Implement OAuth flow with Vercel proxy
+    // OAuth flow - only used if IMAP is not available
+    // For production, prefer IMAP for scalability
     return false;
   }
 
   /// Scan emails for subscription-related content
+  /// Uses IMAP by default for local access
   Future<List<EmailSubscriptionMatch>> scanEmails({
     int maxResults = 50,
     DateTime? since,
+    String folder = 'INBOX',
   }) async {
-    if (_accessToken == null) {
-      throw Exception('Not authenticated. Call authenticate() first.');
-    }
-
     try {
-      final emails = await _fetchEmails(maxResults: maxResults, since: since);
-      final matches = <EmailSubscriptionMatch>[];
-
-      for (final email in emails) {
-        final match = _parseEmailForSubscription(email);
-        if (match != null) {
-          matches.add(match);
+      if (_useImap && _imapService != null) {
+        // Use IMAP for local access
+        return await _imapService!.scanEmails(
+          maxResults: maxResults,
+          since: since,
+          folder: folder,
+        );
+      } else {
+        // Fallback to OAuth API (requires Vercel proxy)
+        if (_accessToken == null) {
+          throw Exception('Not authenticated. Call authenticate() first.');
         }
-      }
 
-      return matches;
+        final emails = await _fetchEmails(maxResults: maxResults, since: since);
+        final matches = <EmailSubscriptionMatch>[];
+
+        for (final email in emails) {
+          final match = _parseEmailForSubscription(email);
+          if (match != null) {
+            matches.add(match);
+          }
+        }
+
+        return matches;
+      }
     } catch (e) {
       throw Exception('Failed to scan emails: $e');
     }
@@ -98,7 +133,11 @@ class EmailScannerService {
     required int maxResults,
     DateTime? since,
   }) async {
-    // Use Vercel proxy to hide API keys
+    // OAuth API - only used if IMAP is not available
+    if (!AppConfig.isVercelProxyConfigured) {
+      throw Exception('Use IMAP for local access. OAuth requires Vercel proxy.');
+    }
+    
     try {
       final result = await VercelProxyService.scanEmails(
         provider: 'gmail',
@@ -112,16 +151,11 @@ class EmailScannerService {
     }
   }
 
-  Future<Map<String, dynamic>?> _fetchGmailMessage(String messageId) async {
-    // This is now handled by Vercel proxy in _fetchGmailEmails
-    // Individual message fetching is done server-side
-    return null;
-  }
-
   Future<List<Map<String, dynamic>>> _fetchOutlookEmails({
     required int maxResults,
     DateTime? since,
   }) async {
+    // OAuth API - only used if IMAP is not available
     final url = Uri.parse(
       'https://graph.microsoft.com/v1.0/me/messages?'
       '\$top=$maxResults&'
@@ -491,13 +525,27 @@ class EmailScannerService {
     return confidence.clamp(0.0, 1.0);
   }
 
+  /// Set OAuth tokens (for OAuth flow, not recommended for production)
   void setTokens(String accessToken, String? refreshToken) {
     _accessToken = accessToken;
     _refreshToken = refreshToken;
+    _useImap = false; // Switch to OAuth mode
   }
 
-  void clearTokens() {
+  /// Clear all credentials and disconnect
+  Future<void> clearCredentials() async {
     _accessToken = null;
     _refreshToken = null;
+    await _imapService?.disconnect();
+  }
+
+  /// Disconnect from email server
+  Future<void> disconnect() async {
+    await _imapService?.disconnect();
+  }
+
+  /// Get IMAP server settings for the current provider
+  Map<String, dynamic> getImapSettings() {
+    return ImapEmailScannerService.getImapSettings(provider);
   }
 }

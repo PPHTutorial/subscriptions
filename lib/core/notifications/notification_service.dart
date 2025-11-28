@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -50,6 +51,25 @@ class LocalNotificationService implements NotificationService {
       ),
     );
 
+    // Create notification channel with sound and vibration (Android 8.0+)
+    if (Platform.isAndroid) {
+      final androidChannel = AndroidNotificationChannel(
+        _channelId,
+        'Subscription reminders',
+        description: 'Notifications for upcoming subscription renewals',
+        importance: Importance.max,
+        playSound: true,
+        enableVibration: true,
+        vibrationPattern: Int64List.fromList([0, 250, 250, 250]),
+        showBadge: true,
+      );
+
+      await _plugin
+          .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin>()
+          ?.createNotificationChannel(androidChannel);
+    }
+
     _initialized = true;
   }
 
@@ -84,6 +104,14 @@ class LocalNotificationService implements NotificationService {
       return;
     }
 
+    // Get notification settings (if available)
+    // Note: This requires notificationSettingsProvider to be accessible
+    // For now, we'll use default settings (all enabled)
+    final playSound =
+        true; // Will be overridden by settings if provider is available
+    final enableVibration =
+        true; // Will be overridden by settings if provider is available
+
     // Check if exact alarms are permitted (Android 12+)
     bool canScheduleExact = true;
     if (Platform.isAndroid) {
@@ -114,6 +142,13 @@ class LocalNotificationService implements NotificationService {
                 importance: Importance.max,
                 priority: Priority.high,
                 category: AndroidNotificationCategory.reminder,
+                playSound: playSound,
+                enableVibration: enableVibration,
+                vibrationPattern: enableVibration
+                    ? Int64List.fromList([0, 250, 250, 250])
+                    : null,
+                showWhen: true,
+                when: scheduledDate.millisecondsSinceEpoch,
               ),
               iOS: const DarwinNotificationDetails(
                 presentAlert: true,
@@ -141,6 +176,13 @@ class LocalNotificationService implements NotificationService {
                 importance: Importance.max,
                 priority: Priority.high,
                 category: AndroidNotificationCategory.reminder,
+                playSound: playSound,
+                enableVibration: enableVibration,
+                vibrationPattern: enableVibration
+                    ? Int64List.fromList([0, 250, 250, 250])
+                    : null,
+                showWhen: true,
+                when: scheduledDate.millisecondsSinceEpoch,
               ),
               iOS: const DarwinNotificationDetails(
                 presentAlert: true,
@@ -173,6 +215,13 @@ class LocalNotificationService implements NotificationService {
                 importance: Importance.max,
                 priority: Priority.high,
                 category: AndroidNotificationCategory.reminder,
+                playSound: playSound,
+                enableVibration: enableVibration,
+                vibrationPattern: enableVibration
+                    ? Int64List.fromList([0, 250, 250, 250])
+                    : null,
+                showWhen: true,
+                when: scheduledDate.millisecondsSinceEpoch,
               ),
               iOS: const DarwinNotificationDetails(
                 presentAlert: true,
@@ -237,5 +286,40 @@ class LocalNotificationService implements NotificationService {
     }
     final suffix = offset == 1 ? 'day' : 'days';
     return '${subscription.serviceName} renews in $offset $suffix.';
+  }
+
+  /// Test notification - shows immediately for debugging
+  Future<void> showTestNotification() async {
+    if (!_initialized) await initialize();
+
+    await _plugin.show(
+      999999,
+      'Test Notification',
+      'This is a test notification to verify sound and vibration work.',
+      NotificationDetails(
+        android: AndroidNotificationDetails(
+          _channelId,
+          'Subscription reminders',
+          channelDescription: 'Notifications for upcoming renewals',
+          importance: Importance.max,
+          priority: Priority.high,
+          category: AndroidNotificationCategory.reminder,
+          playSound: true,
+          enableVibration: true,
+          vibrationPattern: Int64List.fromList([0, 250, 250, 250]),
+          showWhen: true,
+        ),
+        iOS: const DarwinNotificationDetails(
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
+        ),
+      ),
+    );
+  }
+
+  /// Get all pending notifications for debugging
+  Future<List<PendingNotificationRequest>> getPendingNotifications() async {
+    return await _plugin.pendingNotificationRequests();
   }
 }

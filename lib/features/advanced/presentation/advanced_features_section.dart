@@ -12,6 +12,23 @@ import '../ai_insights/presentation/ai_insights_screen.dart';
 class AdvancedFeaturesSection extends ConsumerWidget {
   const AdvancedFeaturesSection({super.key});
 
+  void _showConfigurationDialog(
+      BuildContext context, String title, String message) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(title),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Card(
@@ -31,9 +48,9 @@ class AdvancedFeaturesSection extends ConsumerWidget {
             _FeatureTile(
               icon: Icons.email_rounded,
               title: 'Email Scanner',
-              subtitle: 'Automatically detect subscriptions from emails',
+              subtitle: 'Automatically detect subscriptions from emails (IMAP)',
               enabled: AppConfig.enableEmailScanner,
-              configured: AppConfig.isVercelProxyConfigured,
+              configured: true, // Works locally with IMAP - no API keys needed
               onTap: () {
                 AdNavigationHelper.navigateWithInterstitial(
                   context,
@@ -70,14 +87,20 @@ class AdvancedFeaturesSection extends ConsumerWidget {
             _FeatureTile(
               icon: Icons.cloud_sync_rounded,
               title: 'Cloud Sync',
-              subtitle: 'Sync subscriptions across devices',
+              subtitle: 'Sync subscriptions across devices (Firebase)',
               enabled: AppConfig.enableCloudSync,
               configured: AppConfig.isFirebaseConfigured,
               onTap: () {
-                AdNavigationHelper.navigateWithInterstitial(
-                  context,
-                  const CloudSyncScreen(),
-                );
+                if (AppConfig.isFirebaseConfigured) {
+                  AdNavigationHelper.navigateWithInterstitial(
+                    context,
+                    const CloudSyncScreen(),
+                  );
+                } else {
+                  // Show configuration help
+                  _showConfigurationDialog(context, 'Cloud Sync',
+                      'Cloud Sync requires Firebase configuration. Please set up Firebase in app_config.dart');
+                }
               },
             ),
             _FeatureTile(

@@ -76,7 +76,8 @@ dependencies:
   google_sign_in: ^6.2.1
   
   # Advanced Features
-  # Email Scanning - Using OAuth2 directly via http
+  # Email Scanning - Using IMAP/POP3 for local access
+  enough_mail: ^2.1.7
   
   # SMS Reading (Android only)
   telephony: ^0.2.0
@@ -88,7 +89,7 @@ dependencies:
   # File Picking & Document Reading
   file_picker: ^8.1.2
   pdf: ^3.11.1
-  archive: ^3.4.10
+  archive: ^4.0.7
   
   # Cloud Sync
   firebase_core: ^3.6.0
@@ -110,6 +111,9 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
+  # Assets
+  
   
   assets:
     - assets/images/

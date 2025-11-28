@@ -362,6 +362,7 @@ class _ReceiptUploadScreenState extends ConsumerState<ReceiptUploadScreen> {
                   ),
                 ),
               ),
+              SizedBox(height: ResponsiveHelper.spacing(20)),
             ],
           ],
         ),
@@ -391,6 +392,7 @@ class _DetailRow extends StatelessWidget {
                       Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
                 ),
           ),
+          SizedBox(width: ResponsiveHelper.spacing(8)),
           Text(
             value,
             textAlign: TextAlign.start,
