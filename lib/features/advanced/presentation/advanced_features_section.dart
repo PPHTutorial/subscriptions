@@ -84,10 +84,11 @@ class AdvancedFeaturesSection extends ConsumerWidget {
                 );
               },
             ),
+            const Divider(height: 1),
             _FeatureTile(
               icon: Icons.cloud_sync_rounded,
               title: 'Cloud Sync',
-              subtitle: 'Sync subscriptions across devices (Firebase)',
+              subtitle: 'Sync subscriptions across devices',
               enabled: AppConfig.enableCloudSync,
               configured: AppConfig.isFirebaseConfigured,
               onTap: () {
@@ -158,7 +159,7 @@ class _FeatureTile extends StatelessWidget {
             Padding(
               padding: EdgeInsets.only(top: ResponsiveHelper.spacing(4)),
               child: Text(
-                'API keys not configured',
+                'Contact support.',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: Theme.of(context).colorScheme.tertiary,
                     ),

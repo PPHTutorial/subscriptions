@@ -17,6 +17,9 @@ class SubscriptionsScreen extends ConsumerStatefulWidget {
     required this.onSortChanged,
     required this.showTrialsOnly,
     required this.onTrialsFilterChanged,
+    this.selectedCategory,
+    this.onCategoryChanged,
+    this.searchQuery = '',
   });
 
   final VoidCallback onAddTap;
@@ -24,6 +27,9 @@ class SubscriptionsScreen extends ConsumerStatefulWidget {
   final ValueChanged<SortOption> onSortChanged;
   final bool showTrialsOnly;
   final ValueChanged<bool> onTrialsFilterChanged;
+  final SubscriptionCategory? selectedCategory;
+  final ValueChanged<SubscriptionCategory?>? onCategoryChanged;
+  final String searchQuery;
 
   @override
   ConsumerState<SubscriptionsScreen> createState() =>
@@ -31,9 +37,22 @@ class SubscriptionsScreen extends ConsumerStatefulWidget {
 }
 
 class _SubscriptionsScreenState extends ConsumerState<SubscriptionsScreen> {
-  String _searchQuery = '';
   SubscriptionCategory? _filterCategory;
   final _scrollController = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    _filterCategory = widget.selectedCategory;
+  }
+
+  @override
+  void didUpdateWidget(SubscriptionsScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.selectedCategory != oldWidget.selectedCategory) {
+      _filterCategory = widget.selectedCategory;
+    }
+  }
 
   @override
   void dispose() {
@@ -51,16 +70,6 @@ class _SubscriptionsScreenState extends ConsumerState<SubscriptionsScreen> {
         filtered = sortSubscriptions(filtered, widget.sortOption);
         return Column(
           children: [
-            Padding(
-              padding: EdgeInsets.fromLTRB(
-                ResponsiveHelper.spacing(20),
-                ResponsiveHelper.spacing(16),
-                ResponsiveHelper.spacing(20),
-                0,
-              ),
-              child: _buildSearchField(),
-            ),
-            _buildCategoryChips(),
             Expanded(
               child: filtered.isEmpty
                   ? _EmptyListState(onAddTap: widget.onAddTap)
@@ -120,57 +129,15 @@ class _SubscriptionsScreenState extends ConsumerState<SubscriptionsScreen> {
     );
   }
 
-  Widget _buildSearchField() {
-    return TextField(
-      decoration: const InputDecoration(
-        hintText: 'Search services, payment methods...',
-        prefixIcon: Icon(Icons.search_rounded),
-      ),
-      onChanged: (value) => setState(() => _searchQuery = value.trim()),
-    );
-  }
-
-  Widget _buildCategoryChips() {
-    return SizedBox(
-      height: ResponsiveHelper.spacing(60),
-      child: ListView(
-        scrollDirection: Axis.horizontal,
-        padding: EdgeInsets.symmetric(
-          horizontal: ResponsiveHelper.spacing(16),
-          vertical: ResponsiveHelper.spacing(12),
-        ),
-        children: [
-          ChoiceChip(
-            label: const Text('All'),
-            selected: _filterCategory == null,
-            onSelected: (_) => setState(() => _filterCategory = null),
-          ),
-          ...SubscriptionCategory.values.map(
-            (category) => Padding(
-              padding: EdgeInsets.symmetric(
-                horizontal: ResponsiveHelper.spacing(6),
-              ),
-              child: ChoiceChip(
-                label: Text(category.name),
-                selected: _filterCategory == category,
-                onSelected: (_) => setState(() => _filterCategory = category),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   List<Subscription> _applyFilters(List<Subscription> items) {
     return items.where((subscription) {
-      final matchesSearch = _searchQuery.isEmpty ||
+      final matchesSearch = widget.searchQuery.isEmpty ||
           subscription.serviceName
               .toLowerCase()
-              .contains(_searchQuery.toLowerCase()) ||
+              .contains(widget.searchQuery.toLowerCase()) ||
           subscription.paymentMethod
               .toLowerCase()
-              .contains(_searchQuery.toLowerCase());
+              .contains(widget.searchQuery.toLowerCase());
 
       final matchesCategory =
           _filterCategory == null || subscription.category == _filterCategory;

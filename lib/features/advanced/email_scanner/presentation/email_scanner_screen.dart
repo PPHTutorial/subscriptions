@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/ads/banner_ad_widget.dart';
 import '../../../../core/permissions/permission_service.dart';
 import '../../../../core/responsive/responsive_helper.dart';
 import '../../../subscriptions/application/subscription_controller.dart';
@@ -185,6 +186,8 @@ class _EmailScannerScreenState extends ConsumerState<EmailScannerScreen> {
                     onAdd: () => _addSubscription(match),
                   )),
             ],
+            SizedBox(height: ResponsiveHelper.spacing(20)),
+            const BannerAdWidget(),
           ],
         ),
       ),

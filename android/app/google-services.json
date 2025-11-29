@@ -1,0 +1,46 @@
+{
+  "project_info": {
+    "project_number": "494775919926",
+    "project_id": "subswatcher-68164",
+    "storage_bucket": "subswatcher-68164.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:494775919926:android:cb361d96dd5dfd0e073f97",
+        "android_client_info": {
+          "package_name": "com.codeink.stsl.subscriptions"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "494775919926-re44frj5k32hurtqfetv6baa1f1ktlpa.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCh79d3NhImmqoGuk3-srLK37drL5gvB9g"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "494775919926-re44frj5k32hurtqfetv6baa1f1ktlpa.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "494775919926-1dpnj4bh3napmjnj91jqf5rq3r6q36g7.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.codeink.stsl.subscriptions"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

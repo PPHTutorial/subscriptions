@@ -1,5 +1,8 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/ads/banner_ad_widget.dart';
+import '../../../../core/config/app_config.dart';
 import '../../../../core/responsive/responsive_helper.dart';
 import '../data/cloud_sync_service.dart';
 
@@ -14,6 +17,8 @@ class _CloudSyncScreenState extends ConsumerState<CloudSyncScreen> {
   CloudSyncService? _syncService;
   bool _isSignedIn = false;
   bool _isSyncing = false;
+  String? _errorMessage;
+  bool _isInitializing = true;
 
   @override
   void initState() {
@@ -21,18 +26,73 @@ class _CloudSyncScreenState extends ConsumerState<CloudSyncScreen> {
     _initializeService();
   }
 
-  void _initializeService() {
+  Future<void> _initializeService() async {
+    setState(() {
+      _isInitializing = true;
+      _errorMessage = null;
+    });
+
     try {
+      // Check if Firebase is configured
+      if (!AppConfig.isFirebaseConfigured) {
+        setState(() {
+          _errorMessage =
+              'Firebase is not configured. Please run "flutterfire configure" to set up Firebase.';
+          _isInitializing = false;
+        });
+        return;
+      }
+
+      // Check if Cloud Sync is enabled
+      if (!AppConfig.enableCloudSync) {
+        setState(() {
+          _errorMessage = 'Cloud Sync is disabled in app configuration.';
+          _isInitializing = false;
+        });
+        return;
+      }
+
+      // Check if Firebase is initialized
+      try {
+        Firebase.app();
+      } catch (e) {
+        setState(() {
+          _errorMessage =
+              'Firebase is not initialized. Please restart the app after configuring Firebase.';
+          _isInitializing = false;
+        });
+        return;
+      }
+
+      // Initialize the service
       _syncService = CloudSyncService();
       _isSignedIn = _syncService?.isSignedIn ?? false;
+
+      setState(() {
+        _isInitializing = false;
+      });
     } catch (e) {
-      // Service initialization failed (Firebase not configured)
+      setState(() {
+        _errorMessage = 'Failed to initialize Cloud Sync: $e';
+        _isInitializing = false;
+      });
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_syncService == null) {
+    if (_isInitializing) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('Cloud Sync'),
+        ),
+        body: const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    if (_syncService == null || _errorMessage != null) {
       return Scaffold(
         appBar: AppBar(
           title: const Text('Cloud Sync'),
@@ -50,14 +110,22 @@ class _CloudSyncScreenState extends ConsumerState<CloudSyncScreen> {
                 ),
                 SizedBox(height: ResponsiveHelper.spacing(16)),
                 Text(
-                  'Firebase Not Configured',
+                  _errorMessage?.contains('not configured') == true
+                      ? 'Firebase Not Configured'
+                      : 'Cloud Sync Unavailable',
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
                 SizedBox(height: ResponsiveHelper.spacing(8)),
                 Text(
-                  'Please configure Firebase in app_config.dart',
+                  _errorMessage ?? 'Cloud Sync is not available',
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.bodyMedium,
+                ),
+                SizedBox(height: ResponsiveHelper.spacing(24)),
+                ElevatedButton.icon(
+                  onPressed: _initializeService,
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Retry'),
                 ),
               ],
             ),
@@ -87,7 +155,7 @@ class _CloudSyncScreenState extends ConsumerState<CloudSyncScreen> {
                     ),
                     SizedBox(height: ResponsiveHelper.spacing(8)),
                     Text(
-                      'Sync your subscriptions across all your devices using Firebase',
+                      'Sync your subscriptions across all your devices ',
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
                   ],
@@ -113,9 +181,18 @@ class _CloudSyncScreenState extends ConsumerState<CloudSyncScreen> {
                         label: const Text('Sign in with Google'),
                       ),
                     if (_isSignedIn) ...[
-                      Text(
-                        'Signed in as: ${_syncService?.userId ?? 'Unknown'}',
-                        style: Theme.of(context).textTheme.bodyMedium,
+                      FutureBuilder<String?>(
+                        future: _getUserEmail(),
+                        builder: (context, snapshot) {
+                          final displayText =
+                              snapshot.hasData && snapshot.data != null
+                                  ? snapshot.data!
+                                  : _syncService?.userId ?? 'Unknown';
+                          return Text(
+                            'Signed in as: $displayText',
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          );
+                        },
                       ),
                       SizedBox(height: ResponsiveHelper.spacing(16)),
                       ElevatedButton(
@@ -139,28 +216,60 @@ class _CloudSyncScreenState extends ConsumerState<CloudSyncScreen> {
                 ),
               ),
             ),
+            SizedBox(height: ResponsiveHelper.spacing(20)),
+            const BannerAdWidget(),
           ],
         ),
       ),
     );
   }
 
+  Future<String?> _getUserEmail() async {
+    if (_syncService == null) return null;
+    try {
+      // Get user email from Firebase Auth
+      final user = _syncService!.firebaseAuth.currentUser;
+      return user?.email ?? user?.displayName ?? user?.uid;
+    } catch (e) {
+      return null;
+    }
+  }
+
   Future<void> _signInWithGoogle() async {
     if (_syncService == null) return;
 
+    setState(() => _isSyncing = true);
     try {
       final success = await _syncService!.signInWithGoogle();
-      setState(() => _isSignedIn = success);
+      setState(() {
+        _isSignedIn = success;
+        _isSyncing = false;
+      });
+
       if (!success && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-              content: Text('Sign in failed. Check API configuration.')),
+            content: Text(
+                'Sign in failed. Please check your Google account and try again.'),
+            duration: Duration(seconds: 3),
+          ),
+        );
+      } else if (success && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Successfully signed in!'),
+            duration: Duration(seconds: 2),
+          ),
         );
       }
     } catch (e) {
+      setState(() => _isSyncing = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
+          SnackBar(
+            content: Text('Error signing in: $e'),
+            duration: const Duration(seconds: 3),
+          ),
         );
       }
     }

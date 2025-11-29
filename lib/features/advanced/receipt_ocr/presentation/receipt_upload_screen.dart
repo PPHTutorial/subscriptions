@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:photo_view/photo_view.dart';
+import '../../../../core/ads/banner_ad_widget.dart';
 import '../../../../core/permissions/permission_service.dart';
 import '../../../../core/responsive/responsive_helper.dart';
 import '../../../subscriptions/application/subscription_controller.dart';
@@ -146,13 +147,21 @@ class _ReceiptUploadScreenState extends ConsumerState<ReceiptUploadScreen> {
     final subscription = _result!.toSubscription();
     if (subscription == null) return;
 
-    final notifier = ref.read(subscriptionControllerProvider.notifier);
-    await notifier.addSubscription(subscription);
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Subscription added')),
-      );
-      Navigator.pop(context);
+    try {
+      final notifier = ref.read(subscriptionControllerProvider.notifier);
+      await notifier.addSubscription(subscription);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Subscription added')),
+        );
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to add subscription: $e')),
+        );
+      }
     }
   }
 
@@ -344,6 +353,18 @@ class _ReceiptUploadScreenState extends ConsumerState<ReceiptUploadScreen> {
                                 ''),
                         _DetailRow(
                             'Billing Cycle', _result!.billingCycle?.name ?? ''),
+                        if (_result!.rawText != null &&
+                            _result!.rawText!.isNotEmpty) ...[
+                          SizedBox(height: ResponsiveHelper.spacing(16)),
+                          Divider(),
+                          SizedBox(height: ResponsiveHelper.spacing(12)),
+                          Text(
+                            'Extracted Text',
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                          SizedBox(height: ResponsiveHelper.spacing(8)),
+                          _FormattedTextDisplay(text: _result!.rawText!),
+                        ],
                         SizedBox(height: ResponsiveHelper.spacing(16)),
                         ElevatedButton(
                           onPressed: _addSubscription,
@@ -364,6 +385,8 @@ class _ReceiptUploadScreenState extends ConsumerState<ReceiptUploadScreen> {
               ),
               SizedBox(height: ResponsiveHelper.spacing(20)),
             ],
+            SizedBox(height: ResponsiveHelper.spacing(20)),
+            const BannerAdWidget(),
           ],
         ),
       ),
@@ -403,5 +426,119 @@ class _DetailRow extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+/// Widget to display formatted text preserving layout structure
+class _FormattedTextDisplay extends StatelessWidget {
+  const _FormattedTextDisplay({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final lines = text.split('\n');
+    final theme = Theme.of(context);
+
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(ResponsiveHelper.spacing(16)),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceVariant.withOpacity(0.3),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: theme.colorScheme.outline.withOpacity(0.2),
+          width: 1,
+        ),
+      ),
+      child: SelectableText.rich(
+        _buildFormattedTextSpan(context, lines),
+        style: TextStyle(
+          fontFamily: 'monospace',
+          fontSize: ResponsiveHelper.fontSize(13),
+          height: 1.5,
+          color: theme.colorScheme.onSurface,
+        ),
+      ),
+    );
+  }
+
+  TextSpan _buildFormattedTextSpan(BuildContext context, List<String> lines) {
+    final theme = Theme.of(context);
+    final spans = <TextSpan>[];
+
+    for (int i = 0; i < lines.length; i++) {
+      final line = lines[i];
+
+      // Check if line is empty (preserve spacing)
+      if (line.trim().isEmpty) {
+        spans.add(const TextSpan(text: '\n'));
+        continue;
+      }
+
+      // Preserve multiple spaces for alignment (like Google Lens)
+      final preservedLine = _preserveSpacing(line);
+
+      // Check if line looks like a header (all caps, short, or has special formatting)
+      final isHeader = _isHeaderLine(line);
+
+      spans.add(
+        TextSpan(
+          text: preservedLine,
+          style: TextStyle(
+            fontWeight: isHeader ? FontWeight.bold : FontWeight.normal,
+            fontSize: isHeader
+                ? ResponsiveHelper.fontSize(14)
+                : ResponsiveHelper.fontSize(13),
+            color: isHeader
+                ? theme.colorScheme.primary
+                : theme.colorScheme.onSurface,
+          ),
+        ),
+      );
+
+      // Add newline except for last line
+      if (i < lines.length - 1) {
+        spans.add(const TextSpan(text: '\n'));
+      }
+    }
+
+    return TextSpan(children: spans);
+  }
+
+  /// Preserve spacing structure (multiple spaces for alignment)
+  String _preserveSpacing(String line) {
+    // Replace multiple spaces with preserved spacing
+    // This maintains the visual layout from the original document
+    return line.replaceAllMapped(RegExp(r' {2,}'), (match) {
+      // Preserve spacing but limit excessive spaces
+      final spaceCount = match.group(0)!.length;
+      return ' ' * spaceCount.clamp(1, 20);
+    });
+  }
+
+  /// Detect if a line is likely a header/title
+  bool _isHeaderLine(String line) {
+    final trimmed = line.trim();
+    if (trimmed.isEmpty) return false;
+
+    // All caps and short (likely header)
+    if (trimmed == trimmed.toUpperCase() && trimmed.length < 30) {
+      return true;
+    }
+
+    // Contains common header patterns
+    final headerPatterns = [
+      RegExp(r'^[A-Z][A-Z\s]+$'), // All caps words
+      RegExp(r'^[A-Z][^a-z]{0,20}$'), // Starts with capital, no lowercase
+    ];
+
+    for (final pattern in headerPatterns) {
+      if (pattern.hasMatch(trimmed)) {
+        return true;
+      }
+    }
+
+    return false;
   }
 }

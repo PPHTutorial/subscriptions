@@ -1,22 +1,35 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 
+import '../config/dev_config.dart';
+import '../premium/premium_provider.dart';
 import 'ad_service.dart';
 
-class BannerAdWidget extends StatefulWidget {
+class BannerAdWidget extends ConsumerStatefulWidget {
   const BannerAdWidget({super.key});
 
   @override
-  State<BannerAdWidget> createState() => _BannerAdWidgetState();
+  ConsumerState<BannerAdWidget> createState() => _BannerAdWidgetState();
 }
 
-class _BannerAdWidgetState extends State<BannerAdWidget> {
+class _BannerAdWidgetState extends ConsumerState<BannerAdWidget> {
   BannerAd? _bannerAd;
   bool _isLoaded = false;
 
   @override
   void initState() {
     super.initState();
+    _checkAndLoadAd();
+  }
+
+  Future<void> _checkAndLoadAd() async {
+    // Don't show ads in dev mode or for premium users
+    if (!DevConfig.shouldShowAds) return;
+
+    final isPremium = await ref.read(premiumStatusProvider.future);
+    if (isPremium) return;
+
     _loadAd();
   }
 
@@ -27,9 +40,11 @@ class _BannerAdWidgetState extends State<BannerAdWidget> {
       request: const AdRequest(),
       listener: BannerAdListener(
         onAdLoaded: (_) {
-          setState(() {
-            _isLoaded = true;
-          });
+          if (mounted) {
+            setState(() {
+              _isLoaded = true;
+            });
+          }
         },
         onAdFailedToLoad: (ad, error) {
           ad.dispose();
@@ -48,6 +63,15 @@ class _BannerAdWidgetState extends State<BannerAdWidget> {
 
   @override
   Widget build(BuildContext context) {
+    // Watch premium status
+    final premiumStatus = ref.watch(premiumStatusProvider);
+
+    // Don't show if premium or dev mode
+    if (!DevConfig.shouldShowAds ||
+        (premiumStatus.hasValue && premiumStatus.value == true)) {
+      return const SizedBox.shrink();
+    }
+
     if (!_isLoaded || _bannerAd == null) {
       return const SizedBox.shrink();
     }

@@ -32,63 +32,111 @@ class SubscriptionController extends AsyncNotifier<List<Subscription>> {
   }
 
   Future<void> addSubscription(Subscription subscription) async {
-    final current = await future;
-    final updated = [
-      ...current,
-      subscription.copyWith(
-        accentColor: subscription.accentColor ?? _generateAccent(),
-      ),
-    ]..sort(_sortByRenewal);
+    try {
+      final current = state.value ?? await future;
+      final updated = [
+        ...current,
+        subscription.copyWith(
+          accentColor: subscription.accentColor ?? _generateAccent(),
+        ),
+      ]..sort(_sortByRenewal);
 
-    state = AsyncValue.data(updated);
-    await _repository.saveSubscriptions(updated);
-    final newEntry =
-        updated.firstWhere((element) => element.id == subscription.id);
-    await _notifications.scheduleSubscription(newEntry);
+      // Optimistic update
+      state = AsyncValue.data(updated);
+
+      // Persist to storage
+      await _repository.saveSubscriptions(updated);
+
+      // Schedule notifications
+      final newEntry =
+          updated.firstWhere((element) => element.id == subscription.id);
+      await _notifications.scheduleSubscription(newEntry);
+    } catch (e, stackTrace) {
+      // Rollback on error
+      state = AsyncValue.error(e, stackTrace);
+      state = AsyncValue.data(state.value ?? []);
+      rethrow;
+    }
   }
 
   Future<void> removeSubscription(String id) async {
-    final current = await future;
-    final updated = current
-        .where((subscription) => subscription.id != id)
-        .toList()
-      ..sort(_sortByRenewal);
+    try {
+      final current = state.value ?? await future;
+      final updated = current
+          .where((subscription) => subscription.id != id)
+          .toList()
+        ..sort(_sortByRenewal);
 
-    state = AsyncValue.data(updated);
-    await _repository.saveSubscriptions(updated);
-    await _notifications.cancelForSubscription(id);
+      // Optimistic update
+      state = AsyncValue.data(updated);
+
+      // Persist to storage
+      await _repository.saveSubscriptions(updated);
+
+      // Cancel notifications
+      await _notifications.cancelForSubscription(id);
+    } catch (e, stackTrace) {
+      // Rollback on error
+      state = AsyncValue.error(e, stackTrace);
+      state = AsyncValue.data(state.value ?? []);
+      rethrow;
+    }
   }
 
   Future<void> toggleAutoRenew(String id) async {
-    final current = await future;
-    final updated = current.map((subscription) {
-      if (subscription.id == id) {
-        return subscription.copyWith(autoRenew: !subscription.autoRenew);
-      }
-      return subscription;
-    }).toList()
-      ..sort(_sortByRenewal);
+    try {
+      final current = state.value ?? await future;
+      final updated = current.map((subscription) {
+        if (subscription.id == id) {
+          return subscription.copyWith(autoRenew: !subscription.autoRenew);
+        }
+        return subscription;
+      }).toList()
+        ..sort(_sortByRenewal);
 
-    state = AsyncValue.data(updated);
-    await _repository.saveSubscriptions(updated);
-    final updatedSub =
-        updated.firstWhere((subscription) => subscription.id == id);
-    await _notifications.scheduleSubscription(updatedSub);
+      // Optimistic update
+      state = AsyncValue.data(updated);
+
+      // Persist to storage
+      await _repository.saveSubscriptions(updated);
+
+      // Update notifications
+      final updatedSub =
+          updated.firstWhere((subscription) => subscription.id == id);
+      await _notifications.scheduleSubscription(updatedSub);
+    } catch (e, stackTrace) {
+      // Rollback on error
+      state = AsyncValue.error(e, stackTrace);
+      state = AsyncValue.data(state.value ?? []);
+      rethrow;
+    }
   }
 
   Future<void> updateSubscription(Subscription updatedSubscription) async {
-    final current = await future;
-    final updated = current.map((subscription) {
-      if (subscription.id == updatedSubscription.id) {
-        return updatedSubscription;
-      }
-      return subscription;
-    }).toList()
-      ..sort(_sortByRenewal);
+    try {
+      final current = state.value ?? await future;
+      final updated = current.map((subscription) {
+        if (subscription.id == updatedSubscription.id) {
+          return updatedSubscription;
+        }
+        return subscription;
+      }).toList()
+        ..sort(_sortByRenewal);
 
-    state = AsyncValue.data(updated);
-    await _repository.saveSubscriptions(updated);
-    await _notifications.scheduleSubscription(updatedSubscription);
+      // Optimistic update
+      state = AsyncValue.data(updated);
+
+      // Persist to storage
+      await _repository.saveSubscriptions(updated);
+
+      // Update notifications
+      await _notifications.scheduleSubscription(updatedSubscription);
+    } catch (e, stackTrace) {
+      // Rollback on error
+      state = AsyncValue.error(e, stackTrace);
+      state = AsyncValue.data(state.value ?? []);
+      rethrow;
+    }
   }
 
   int _sortByRenewal(Subscription a, Subscription b) =>
@@ -105,4 +153,3 @@ class SubscriptionController extends AsyncNotifier<List<Subscription>> {
     return colors[Random().nextInt(colors.length)].value;
   }
 }
-

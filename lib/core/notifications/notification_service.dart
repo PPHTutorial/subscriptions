@@ -125,14 +125,16 @@ class LocalNotificationService implements NotificationService {
 
       final tzDate = tz.TZDateTime.from(scheduledDate, tz.local);
       final id = _notificationId(subscription.id, offset);
+      final title = _notificationTitle(subscription, offset);
+      final message = _message(subscription, offset);
 
       try {
         // Try exact scheduling first if permitted
         if (canScheduleExact && Platform.isAndroid) {
           await _plugin.zonedSchedule(
             id,
-            '${subscription.serviceName} renews soon',
-            _message(subscription, offset),
+            title,
+            message,
             tzDate,
             NotificationDetails(
               android: AndroidNotificationDetails(
@@ -165,8 +167,8 @@ class LocalNotificationService implements NotificationService {
           // Fall back to inexact scheduling
           await _plugin.zonedSchedule(
             id,
-            '${subscription.serviceName} renews soon',
-            _message(subscription, offset),
+            title,
+            message,
             tzDate,
             NotificationDetails(
               android: AndroidNotificationDetails(
@@ -204,8 +206,8 @@ class LocalNotificationService implements NotificationService {
           // Retry with inexact scheduling
           await _plugin.zonedSchedule(
             id,
-            '${subscription.serviceName} renews soon',
-            _message(subscription, offset),
+            title,
+            message,
             tzDate,
             NotificationDetails(
               android: AndroidNotificationDetails(
@@ -275,17 +277,158 @@ class LocalNotificationService implements NotificationService {
     }
   }
 
+  /// Generate a descriptive notification ID that includes subscription and reminder info
   int _notificationId(String subscriptionId, int offset) {
-    final base = subscriptionId.hashCode & 0x7fffffff;
-    return base + offset;
+    // Create a more descriptive ID by combining subscription ID hash with offset
+    // This ensures uniqueness while being traceable
+    final subscriptionHash = subscriptionId.hashCode & 0x7fffffff;
+    // Use offset * 10000 to create clear separation between different reminder days
+    // This makes it easier to identify which reminder this is for
+    return subscriptionHash + (offset * 10000);
   }
 
-  String _message(Subscription subscription, int offset) {
+  /// Generate a detailed notification title with context
+  String _notificationTitle(Subscription subscription, int offset) {
     if (offset == 0) {
-      return '${subscription.serviceName} renews today.';
+      return '${subscription.serviceName} - Renewal Today';
+    } else if (offset == 1) {
+      return '${subscription.serviceName} - Renews Tomorrow';
+    } else {
+      return '${subscription.serviceName} - Renewal in $offset Days';
     }
-    final suffix = offset == 1 ? 'day' : 'days';
-    return '${subscription.serviceName} renews in $offset $suffix.';
+  }
+
+  /// Generate a comprehensive notification message with all relevant details
+  String _message(Subscription subscription, int offset) {
+    final renewalDate = subscription.renewalDate;
+    final formattedDate = _formatDate(renewalDate);
+    final formattedTime = _formatTime(renewalDate);
+    final cost = _formatCost(subscription);
+    final billingCycle = subscription.billingLabel;
+
+    // Build a detailed message with all important information
+    final buffer = StringBuffer();
+
+    if (offset == 0) {
+      buffer
+          .write('Your ${subscription.serviceName} subscription renews today');
+    } else if (offset == 1) {
+      buffer.write(
+          'Your ${subscription.serviceName} subscription renews tomorrow');
+    } else {
+      buffer.write(
+          'Your ${subscription.serviceName} subscription renews in $offset days');
+    }
+
+    buffer.write(' on $formattedDate');
+
+    if (formattedTime.isNotEmpty) {
+      buffer.write(' at $formattedTime');
+    }
+
+    buffer.write('.');
+
+    // Add cost information
+    if (subscription.cost > 0) {
+      buffer.write('\nAmount: $cost');
+      if (subscription.billingCycle != BillingCycle.custom) {
+        buffer.write(' ($billingCycle)');
+      }
+    }
+
+    // Add payment method if available
+    if (subscription.paymentMethod.isNotEmpty) {
+      buffer.write('\nPayment: ${subscription.paymentMethod}');
+    }
+
+    // Add urgency indicator for same-day renewals
+    if (offset == 0) {
+      buffer.write(
+          '\n\nAction required: Check your payment method to avoid service interruption.');
+    } else if (offset <= 3) {
+      buffer.write('\n\nReminder: Ensure sufficient funds are available.');
+    }
+
+    return buffer.toString();
+  }
+
+  /// Format date in a user-friendly way
+  String _formatDate(DateTime date) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final tomorrow = today.add(const Duration(days: 1));
+    final targetDate = DateTime(date.year, date.month, date.day);
+
+    if (targetDate == today) {
+      return 'Today';
+    } else if (targetDate == tomorrow) {
+      return 'Tomorrow';
+    } else {
+      // Format as "Mon, Jan 15" or "Jan 15, 2024" if different year
+      final months = [
+        'Jan',
+        'Feb',
+        'Mar',
+        'Apr',
+        'May',
+        'Jun',
+        'Jul',
+        'Aug',
+        'Sep',
+        'Oct',
+        'Nov',
+        'Dec'
+      ];
+      final weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+      final weekday = weekdays[date.weekday - 1];
+      final month = months[date.month - 1];
+      final day = date.day;
+
+      if (date.year == now.year) {
+        return '$weekday, $month $day';
+      } else {
+        return '$weekday, $month $day, ${date.year}';
+      }
+    }
+  }
+
+  /// Format time in a user-friendly way
+  String _formatTime(DateTime date) {
+    // Only show time if it's not midnight (default time)
+    if (date.hour == 0 && date.minute == 0) {
+      return '';
+    }
+
+    final hour = date.hour;
+    final minute = date.minute;
+    final period = hour >= 12 ? 'PM' : 'AM';
+    final displayHour = hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour);
+    final displayMinute = minute.toString().padLeft(2, '0');
+
+    return '$displayHour:$displayMinute $period';
+  }
+
+  /// Format cost with currency
+  String _formatCost(Subscription subscription) {
+    final currencyCode = subscription.currencyCode;
+    final cost = subscription.cost;
+
+    // Format based on currency
+    if (currencyCode == 'USD' ||
+        currencyCode == 'CAD' ||
+        currencyCode == 'AUD') {
+      return '\$${cost.toStringAsFixed(2)}';
+    } else if (currencyCode == 'EUR') {
+      return '€${cost.toStringAsFixed(2)}';
+    } else if (currencyCode == 'GBP') {
+      return '£${cost.toStringAsFixed(2)}';
+    } else if (currencyCode == 'JPY' || currencyCode == 'KRW') {
+      return '${currencyCode} ${cost.toStringAsFixed(0)}';
+    } else {
+      // For other currencies, show code and amount
+      return '${currencyCode} ${cost.toStringAsFixed(2)}';
+    }
   }
 
   /// Test notification - shows immediately for debugging

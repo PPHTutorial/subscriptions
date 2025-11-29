@@ -1,55 +1,47 @@
 import '../../../subscriptions/domain/subscription.dart';
-import '../../../../core/config/app_config.dart';
+import '../../../../core/currency/currency_conversion_service.dart';
+import 'insights_dataset.dart';
+import 'ollama_insights_service.dart';
 
 /// Service for generating AI-powered insights about subscriptions
 class AiInsightsService {
+  final CurrencyConversionService _currencyService =
+      CurrencyConversionService();
+
   /// Analyze subscriptions and generate insights
   Future<List<Insight>> generateInsights(
       List<Subscription> subscriptions) async {
     final insights = <Insight>[];
 
     // Waste prediction
-    final wasteInsight = _predictWaste(subscriptions);
+    final wasteInsight = await _predictWaste(subscriptions);
     if (wasteInsight != null) {
       insights.add(wasteInsight);
     }
 
     // Overlapping services detection
-    final overlapInsights = _detectOverlappingServices(subscriptions);
+    final overlapInsights = await _detectOverlappingServices(subscriptions);
     insights.addAll(overlapInsights);
 
     // Budget insights
-    final budgetInsight = _analyzeBudget(subscriptions);
+    final budgetInsight = await _analyzeBudget(subscriptions);
     if (budgetInsight != null) {
       insights.add(budgetInsight);
     }
 
     // Alternative suggestions
-    final alternativeInsights = _suggestAlternatives(subscriptions);
+    final alternativeInsights = await _suggestAlternatives(subscriptions);
     insights.addAll(alternativeInsights);
 
     // Usage recommendations
-    final usageInsights = _recommendUsage(subscriptions);
+    final usageInsights = await _recommendUsage(subscriptions);
     insights.addAll(usageInsights);
 
     return insights;
   }
 
   /// Predict subscription waste (unused or duplicate services)
-  Insight? _predictWaste(List<Subscription> subscriptions) {
-    // Calculate monthly spending
-    double monthlySpend = 0;
-    for (final sub in subscriptions) {
-      final normalized = switch (sub.billingCycle) {
-        BillingCycle.weekly => sub.cost * 4.3,
-        BillingCycle.monthly => sub.cost,
-        BillingCycle.quarterly => sub.cost / 3,
-        BillingCycle.yearly => sub.cost / 12,
-        BillingCycle.custom => sub.cost,
-      };
-      monthlySpend += normalized;
-    }
-
+  Future<Insight?> _predictWaste(List<Subscription> subscriptions) async {
     // Find inactive subscriptions (past due for 90+ days)
     final inactive = subscriptions.where((s) {
       if (!s.isPastDue) return false;
@@ -58,25 +50,26 @@ class AiInsightsService {
     }).toList();
 
     if (inactive.isNotEmpty) {
-      final totalWaste = inactive.fold<double>(
-        0,
-        (sum, s) =>
-            sum +
-            (switch (s.billingCycle) {
-              BillingCycle.weekly => s.cost * 4.3,
-              BillingCycle.monthly => s.cost,
-              BillingCycle.quarterly => s.cost / 3,
-              BillingCycle.yearly => s.cost / 12,
-              BillingCycle.custom => s.cost,
-            }),
-      );
+      // Convert all costs to base currency before summing
+      double totalWaste = 0;
+      for (final sub in inactive) {
+        final normalizedMonthly =
+            _normalizeToMonthly(sub.cost, sub.billingCycle);
+        final convertedCost = await _currencyService.convertToBase(
+          amount: normalizedMonthly,
+          fromCurrency: sub.currencyCode,
+        );
+        totalWaste += convertedCost;
+      }
+
+      final baseCurrency = _currencyService.baseCurrency;
 
       return Insight(
         type: InsightType.waste,
         title: 'Potential Waste Detected',
         message:
             'You have ${inactive.length} subscription(s) that may be inactive. '
-            'This could save you ${_formatCurrency(totalWaste)} per month.',
+            'This could save you ${_formatCurrency(totalWaste)} $baseCurrency per month.',
         severity: InsightSeverity.high,
         actionable: true,
         actionLabel: 'Review inactive subscriptions',
@@ -87,85 +80,99 @@ class AiInsightsService {
     return null;
   }
 
-  /// Detect overlapping services (e.g., multiple streaming services)
-  List<Insight> _detectOverlappingServices(List<Subscription> subscriptions) {
+  /// Detect overlapping services using comprehensive dataset
+  Future<List<Insight>> _detectOverlappingServices(
+      List<Subscription> subscriptions) async {
     final insights = <Insight>[];
 
-    // Group by category
-    final byCategory = <SubscriptionCategory, List<Subscription>>{};
+    // Check each overlapping group
+    final groupMembers = <String, List<Subscription>>{};
+
     for (final sub in subscriptions) {
-      byCategory.putIfAbsent(sub.category, () => []).add(sub);
+      final group = InsightsDataset.getOverlappingGroup(sub.serviceName);
+      if (group != null) {
+        groupMembers.putIfAbsent(group, () => []).add(sub);
+      }
     }
 
-    // Check for overlaps in entertainment (streaming services)
-    final entertainment = byCategory[SubscriptionCategory.entertainment] ?? [];
-    if (entertainment.length > 2) {
-      final monthlyCost = entertainment.fold<double>(
-        0,
-        (sum, s) =>
-            sum +
-            (switch (s.billingCycle) {
-              BillingCycle.weekly => s.cost * 4.3,
-              BillingCycle.monthly => s.cost,
-              BillingCycle.quarterly => s.cost / 3,
-              BillingCycle.yearly => s.cost / 12,
-              BillingCycle.custom => s.cost,
-            }),
-      );
+    // Generate insights for each overlapping group
+    for (final entry in groupMembers.entries) {
+      final groupName = entry.key;
+      final members = entry.value;
 
-      insights.add(Insight(
-        type: InsightType.overlap,
-        title: 'Multiple Streaming Services',
-        message: 'You have ${entertainment.length} streaming subscriptions. '
-            'Consider consolidating to save ${_formatCurrency(monthlyCost * 0.3)} per month.',
-        severity: InsightSeverity.medium,
-        actionable: true,
-        actionLabel: 'Review streaming services',
-        subscriptions: entertainment,
-      ));
-    }
+      if (members.length > 1) {
+        // Convert all costs to base currency before summing
+        double monthlyCost = 0;
+        for (final sub in members) {
+          final normalizedMonthly =
+              _normalizeToMonthly(sub.cost, sub.billingCycle);
+          final convertedCost = await _currencyService.convertToBase(
+            amount: normalizedMonthly,
+            fromCurrency: sub.currencyCode,
+          );
+          monthlyCost += convertedCost;
+        }
 
-    // Check for productivity tool overlaps
-    final productivity = byCategory[SubscriptionCategory.productivity] ?? [];
-    if (productivity.length > 3) {
-      insights.add(Insight(
-        type: InsightType.overlap,
-        title: 'Multiple Productivity Tools',
-        message: 'You have ${productivity.length} productivity subscriptions. '
-            'Some may have overlapping features.',
-        severity: InsightSeverity.low,
-        actionable: true,
-        actionLabel: 'Review productivity tools',
-        subscriptions: productivity,
-      ));
+        // Calculate potential savings (assuming keeping only one)
+        final savings = monthlyCost * ((members.length - 1) / members.length);
+        final baseCurrency = _currencyService.baseCurrency;
+
+        final groupDisplayName = groupName
+            .split('_')
+            .map((word) => word[0].toUpperCase() + word.substring(1))
+            .join(' ');
+
+        insights.add(Insight(
+          type: InsightType.overlap,
+          title: 'Multiple $groupDisplayName Subscriptions',
+          message:
+              'You have ${members.length} ${groupDisplayName.toLowerCase()} subscriptions. '
+              'Consider consolidating to save ${_formatCurrency(savings)} $baseCurrency per month. '
+              'Many services offer similar features.',
+          severity: members.length > 3
+              ? InsightSeverity.high
+              : members.length > 2
+                  ? InsightSeverity.medium
+                  : InsightSeverity.low,
+          actionable: true,
+          actionLabel: 'Review ${groupDisplayName.toLowerCase()}',
+          subscriptions: members,
+        ));
+      }
     }
 
     return insights;
   }
 
   /// Analyze budget and spending patterns
-  Insight? _analyzeBudget(List<Subscription> subscriptions) {
+  Future<Insight?> _analyzeBudget(List<Subscription> subscriptions) async {
     double monthlySpend = 0;
+
+    // Convert all subscriptions to base currency before summing
     for (final sub in subscriptions) {
-      final normalized = switch (sub.billingCycle) {
-        BillingCycle.weekly => sub.cost * 4.3,
-        BillingCycle.monthly => sub.cost,
-        BillingCycle.quarterly => sub.cost / 3,
-        BillingCycle.yearly => sub.cost / 12,
-        BillingCycle.custom => sub.cost,
-      };
-      monthlySpend += normalized;
+      // Normalize to monthly first
+      final normalizedMonthly = _normalizeToMonthly(sub.cost, sub.billingCycle);
+
+      // Convert to base currency
+      final convertedCost = await _currencyService.convertToBase(
+        amount: normalizedMonthly,
+        fromCurrency: sub.currencyCode,
+      );
+
+      monthlySpend += convertedCost;
     }
 
     final yearlySpend = monthlySpend * 12;
+    final baseCurrency = _currencyService.baseCurrency;
 
+    // Threshold in base currency (e.g., $100 USD or equivalent)
     if (monthlySpend > 100) {
       return Insight(
         type: InsightType.budget,
         title: 'High Monthly Spending',
         message:
-            'You\'re spending ${_formatCurrency(monthlySpend)} per month on subscriptions. '
-            'That\'s ${_formatCurrency(yearlySpend)} per year. Consider reviewing your subscriptions.',
+            'You\'re spending ${_formatCurrency(monthlySpend)} $baseCurrency per month on subscriptions. '
+            'That\'s ${_formatCurrency(yearlySpend)} $baseCurrency per year. Consider reviewing your subscriptions.',
         severity: InsightSeverity.medium,
         actionable: true,
         actionLabel: 'View budget breakdown',
@@ -176,33 +183,40 @@ class AiInsightsService {
     return null;
   }
 
-  /// Suggest cheaper alternatives
-  List<Insight> _suggestAlternatives(List<Subscription> subscriptions) {
+  /// Suggest cheaper alternatives using comprehensive dataset
+  Future<List<Insight>> _suggestAlternatives(
+      List<Subscription> subscriptions) async {
     final insights = <Insight>[];
 
-    // Known alternatives mapping
-    final alternatives = {
-      'Netflix': ['Disney+', 'Hulu', 'Amazon Prime'],
-      'Spotify': ['Apple Music', 'YouTube Music'],
-      'Adobe Creative Cloud': ['Affinity Suite', 'Canva Pro'],
-      'Microsoft Office 365': ['Google Workspace', 'LibreOffice'],
-    };
-
     for (final sub in subscriptions) {
-      final serviceName = sub.serviceName.toLowerCase();
-      final alternativeServices = alternatives.entries.firstWhere(
-        (entry) => serviceName.contains(entry.key.toLowerCase()),
-        orElse: () => const MapEntry('', []),
-      );
+      final alternatives =
+          InsightsDataset.getAlternativesForService(sub.serviceName);
 
-      if (alternativeServices.value.isNotEmpty) {
+      if (alternatives.isNotEmpty) {
+        // Find best alternative (highest savings)
+        final bestAlternative = alternatives.reduce(
+          (a, b) => a.savings > b.savings ? a : b,
+        );
+
+        // Normalize to monthly and convert to base currency
+        final normalizedCost = _normalizeToMonthly(sub.cost, sub.billingCycle);
+        final convertedCost = await _currencyService.convertToBase(
+          amount: normalizedCost,
+          fromCurrency: sub.currencyCode,
+        );
+        final savingsAmount = convertedCost * bestAlternative.savings;
+        final baseCurrency = _currencyService.baseCurrency;
+
         insights.add(Insight(
           type: InsightType.alternative,
-          title: 'Cheaper Alternative Available',
+          title: 'Alternative Available: ${bestAlternative.name}',
           message:
-              'Consider ${alternativeServices.value.first} as an alternative to ${sub.serviceName}. '
-              'Could save up to ${_formatCurrency(sub.cost * 0.3)} per month.',
-          severity: InsightSeverity.low,
+              'Consider ${bestAlternative.name} as an alternative to ${sub.serviceName}. '
+              '${bestAlternative.reason}. '
+              'Could save up to ${_formatCurrency(savingsAmount)} $baseCurrency per month.',
+          severity: bestAlternative.savings > 0.5
+              ? InsightSeverity.medium
+              : InsightSeverity.low,
           actionable: true,
           actionLabel: 'View alternatives',
           subscriptions: [sub],
@@ -214,27 +228,35 @@ class AiInsightsService {
   }
 
   /// Recommend usage optimization
-  List<Insight> _recommendUsage(List<Subscription> subscriptions) {
+  Future<List<Insight>> _recommendUsage(
+      List<Subscription> subscriptions) async {
     final insights = <Insight>[];
 
-    // Find expensive subscriptions
-    final expensive = subscriptions.where((s) {
-      final normalized = switch (s.billingCycle) {
-        BillingCycle.weekly => s.cost * 4.3,
-        BillingCycle.monthly => s.cost,
-        BillingCycle.quarterly => s.cost / 3,
-        BillingCycle.yearly => s.cost / 12,
-        BillingCycle.custom => s.cost,
-      };
-      return normalized > 20;
-    }).toList();
+    // Find expensive subscriptions (convert to base currency first)
+    final expensive = <Subscription>[];
+    for (final sub in subscriptions) {
+      // Normalize to monthly first
+      final normalizedMonthly = _normalizeToMonthly(sub.cost, sub.billingCycle);
+
+      // Convert to base currency before comparison
+      final convertedCost = await _currencyService.convertToBase(
+        amount: normalizedMonthly,
+        fromCurrency: sub.currencyCode,
+      );
+
+      // Check if expensive (threshold in base currency)
+      if (convertedCost > 20) {
+        expensive.add(sub);
+      }
+    }
 
     if (expensive.isNotEmpty) {
+      final baseCurrency = _currencyService.baseCurrency;
       insights.add(Insight(
         type: InsightType.usage,
         title: 'Optimize High-Value Subscriptions',
         message:
-            'You have ${expensive.length} subscription(s) costing more than ${_formatCurrency(20)}/month. '
+            'You have ${expensive.length} subscription(s) costing more than ${_formatCurrency(20)} $baseCurrency/month. '
             'Make sure you\'re getting value from these services.',
         severity: InsightSeverity.low,
         actionable: true,
@@ -246,18 +268,57 @@ class AiInsightsService {
     return insights;
   }
 
-  String _formatCurrency(double amount) {
-    return '\$${amount.toStringAsFixed(2)}';
+  /// Normalize cost to monthly
+  double _normalizeToMonthly(double cost, BillingCycle cycle) {
+    return switch (cycle) {
+      BillingCycle.weekly => cost * 4.3,
+      BillingCycle.monthly => cost,
+      BillingCycle.quarterly => cost / 3,
+      BillingCycle.yearly => cost / 12,
+      BillingCycle.custom => cost,
+    };
   }
 
-  /// Generate AI-powered insights using Vercel proxy (optional)
+  String _formatCurrency(double amount) {
+    // Use the currency service to format with proper symbol for base currency
+    return _currencyService.formatCurrency(
+      amount: amount,
+      currencyCode: _currencyService.baseCurrency,
+    );
+  }
+
+  /// Generate AI-powered insights using Ollama (optional)
   ///
-  /// Can be enhanced to use Vercel proxy for OpenAI/Anthropic integration
-  /// For now, uses local logic for insights
+  /// Can be enhanced to use Ollama for natural language generation
+  /// Falls back to rule-based insights if Ollama is unavailable
+  ///
+  /// For production: Ollama server must be deployed to cloud or provided by user
+  /// Default behavior: Uses rule-based insights (works offline, no server needed)
   Future<List<Insight>> generateAiInsights(
-      List<Subscription> subscriptions) async {
-    // Always use local insights for now
-    // Can be enhanced to use Vercel proxy for OpenAI/Anthropic integration
+    List<Subscription> subscriptions, {
+    bool enableOllama = false,
+    String? ollamaServerUrl,
+  }) async {
+    // Default: Use rule-based insights (works offline, no server needed)
+    // This ensures the app works perfectly for all app store users
+
+    // Optionally enhance with Ollama if enabled and server URL provided
+    if (enableOllama && ollamaServerUrl != null) {
+      try {
+        final ollamaService = OllamaInsightsService(
+          baseUrl: ollamaServerUrl,
+          useOllama: true,
+        );
+        if (await ollamaService.isOllamaAvailable()) {
+          return await ollamaService.generateInsights(subscriptions);
+        }
+      } catch (e) {
+        // Fall back to rule-based insights
+        print('Ollama not available, using rule-based insights: $e');
+      }
+    }
+
+    // Use rule-based insights (default - works for all users)
     return generateInsights(subscriptions);
   }
 }

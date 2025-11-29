@@ -283,7 +283,7 @@ class _AddSubscriptionSheetState extends State<AddSubscriptionSheet> {
                         .map(
                           (item) => DropdownMenuItem(
                             value: item,
-                            child: Text(item.name),
+                            child: Text(item.displayName),
                           ),
                         )
                         .toList(),
@@ -497,10 +497,19 @@ class _AddSubscriptionSheetState extends State<AddSubscriptionSheet> {
       accentColor: _isEditing ? widget.subscription!.accentColor : null,
     );
 
-    await widget.onSubmit(subscription);
-
-    if (mounted) {
-      setState(() => _isSaving = false);
+    try {
+      await widget.onSubmit(subscription);
+      if (mounted) {
+        setState(() => _isSaving = false);
+        Navigator.of(context).pop();
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isSaving = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to save: $e')),
+        );
+      }
     }
   }
 }

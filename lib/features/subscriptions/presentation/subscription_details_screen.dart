@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../../../core/ads/banner_ad_widget.dart';
 import '../../../../core/responsive/responsive_helper.dart';
 import '../application/subscription_controller.dart';
 import '../domain/subscription.dart';
@@ -18,12 +19,23 @@ class SubscriptionDetailsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Watch provider to get real-time updates
+    final subscriptionsAsync = ref.watch(subscriptionControllerProvider);
+    final currentSubscription = subscriptionsAsync.when(
+      data: (subscriptions) => subscriptions.firstWhere(
+        (s) => s.id == subscription.id,
+        orElse: () => subscription,
+      ),
+      loading: () => subscription,
+      error: (_, __) => subscription,
+    );
+
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(subscription.serviceName),
+        title: Text(currentSubscription.serviceName),
         actions: [
           IconButton(
             icon: const Icon(Icons.edit_rounded),
@@ -56,7 +68,7 @@ class SubscriptionDetailsScreen extends ConsumerWidget {
                           backgroundColor:
                               colorScheme.primary.withOpacity(0.12),
                           child: Text(
-                            subscription.serviceName.characters.first
+                            currentSubscription.serviceName.characters.first
                                 .toUpperCase(),
                             style: TextStyle(
                               color: colorScheme.primary,
@@ -71,12 +83,12 @@ class SubscriptionDetailsScreen extends ConsumerWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                subscription.serviceName,
+                                currentSubscription.serviceName,
                                 style: theme.textTheme.headlineSmall,
                               ),
                               SizedBox(height: ResponsiveHelper.spacing(4)),
                               Text(
-                                subscription.category.name.toUpperCase(),
+                                currentSubscription.category.name.toUpperCase(),
                                 style: theme.textTheme.bodySmall?.copyWith(
                                   color: colorScheme.primary,
                                   fontWeight: FontWeight.w600,
@@ -94,42 +106,44 @@ class SubscriptionDetailsScreen extends ConsumerWidget {
                       icon: Icons.attach_money_rounded,
                       label: 'Cost',
                       value:
-                          '${subscription.currencyCode} ${subscription.cost.toStringAsFixed(2)}',
+                          '${currentSubscription.currencyCode} ${currentSubscription.cost.toStringAsFixed(2)}',
                     ),
                     SizedBox(height: ResponsiveHelper.spacing(16)),
                     _DetailRow(
                       icon: Icons.repeat_rounded,
                       label: 'Billing Cycle',
-                      value: subscription.billingLabel,
+                      value: currentSubscription.billingLabel,
                     ),
                     SizedBox(height: ResponsiveHelper.spacing(16)),
                     _DetailRow(
                       icon: Icons.calendar_today_rounded,
                       label: 'Renewal Date',
                       value: DateFormat('EEEE, MMMM dd, yyyy')
-                          .format(subscription.renewalDate),
+                          .format(currentSubscription.renewalDate),
                     ),
                     SizedBox(height: ResponsiveHelper.spacing(16)),
                     _DetailRow(
                       icon: Icons.payment_rounded,
                       label: 'Payment Method',
-                      value: subscription.paymentMethod,
+                      value: currentSubscription.paymentMethod,
                     ),
                     SizedBox(height: ResponsiveHelper.spacing(16)),
                     _DetailRow(
-                      icon: subscription.autoRenew
+                      icon: currentSubscription.autoRenew
                           ? Icons.autorenew_rounded
                           : Icons.sync_disabled_rounded,
                       label: 'Auto Renew',
-                      value: subscription.autoRenew ? 'Enabled' : 'Disabled',
+                      value: currentSubscription.autoRenew
+                          ? 'Enabled'
+                          : 'Disabled',
                     ),
-                    if (subscription.isTrial) ...[
+                    if (currentSubscription.isTrial) ...[
                       SizedBox(height: ResponsiveHelper.spacing(16)),
                       _DetailRow(
                         icon: Icons.bolt_rounded,
                         label: 'Trial Status',
-                        value: subscription.trialEndsOn != null
-                            ? 'Ends ${DateFormat('MMM dd, yyyy').format(subscription.trialEndsOn!)}'
+                        value: currentSubscription.trialEndsOn != null
+                            ? 'Ends ${DateFormat('MMM dd, yyyy').format(currentSubscription.trialEndsOn!)}'
                             : 'Active',
                       ),
                     ],
@@ -161,7 +175,7 @@ class SubscriptionDetailsScreen extends ConsumerWidget {
                       Wrap(
                         spacing: ResponsiveHelper.spacing(8),
                         runSpacing: ResponsiveHelper.spacing(8),
-                        children: subscription.reminderDays.map((days) {
+                        children: currentSubscription.reminderDays.map((days) {
                           return Chip(
                             side: BorderSide(color: colorScheme.outline),
                             label: Text(
@@ -177,8 +191,8 @@ class SubscriptionDetailsScreen extends ConsumerWidget {
                 ),
               ),
             ),
-            if (subscription.notes != null &&
-                subscription.notes!.isNotEmpty) ...[
+            if (currentSubscription.notes != null &&
+                currentSubscription.notes!.isNotEmpty) ...[
               SizedBox(height: ResponsiveHelper.spacing(16)),
               Card(
                 child: Padding(
@@ -192,7 +206,7 @@ class SubscriptionDetailsScreen extends ConsumerWidget {
                       ),
                       SizedBox(height: ResponsiveHelper.spacing(12)),
                       Text(
-                        subscription.notes!,
+                        currentSubscription.notes!,
                         style: theme.textTheme.bodyMedium,
                       ),
                     ],
@@ -200,6 +214,8 @@ class SubscriptionDetailsScreen extends ConsumerWidget {
                 ),
               ),
             ],
+            SizedBox(height: ResponsiveHelper.spacing(20)),
+            const BannerAdWidget(),
           ],
         ),
       ),
@@ -207,6 +223,16 @@ class SubscriptionDetailsScreen extends ConsumerWidget {
   }
 
   Future<void> _editSubscription(BuildContext context, WidgetRef ref) async {
+    final subscriptionsAsync = ref.read(subscriptionControllerProvider);
+    final currentSub = subscriptionsAsync.when(
+      data: (subscriptions) => subscriptions.firstWhere(
+        (s) => s.id == subscription.id,
+        orElse: () => subscription,
+      ),
+      loading: () => subscription,
+      error: (_, __) => subscription,
+    );
+
     final notifier = ref.read(subscriptionControllerProvider.notifier);
 
     await showModalBottomSheet<void>(
@@ -214,22 +240,40 @@ class SubscriptionDetailsScreen extends ConsumerWidget {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => AddSubscriptionSheet(
-        subscription: subscription,
+        subscription: currentSub,
         onSubmit: (updated) async {
-          await notifier.updateSubscription(updated);
-          if (context.mounted) Navigator.of(context).pop();
+          try {
+            await notifier.updateSubscription(updated);
+            if (context.mounted) Navigator.of(context).pop();
+          } catch (e) {
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Failed to update: $e')),
+              );
+            }
+          }
         },
       ),
     );
   }
 
   Future<void> _deleteSubscription(BuildContext context, WidgetRef ref) async {
+    final subscriptionsAsync = ref.read(subscriptionControllerProvider);
+    final currentSub = subscriptionsAsync.when(
+      data: (subscriptions) => subscriptions.firstWhere(
+        (s) => s.id == subscription.id,
+        orElse: () => subscription,
+      ),
+      loading: () => subscription,
+      error: (_, __) => subscription,
+    );
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete Subscription'),
         content: Text(
-          'Are you sure you want to delete ${subscription.serviceName}? This action cannot be undone.',
+          'Are you sure you want to delete ${currentSub.serviceName}? This action cannot be undone.',
         ),
         actions: [
           TextButton(
@@ -248,9 +292,17 @@ class SubscriptionDetailsScreen extends ConsumerWidget {
     );
 
     if (confirmed == true && context.mounted) {
-      final notifier = ref.read(subscriptionControllerProvider.notifier);
-      await notifier.removeSubscription(subscription.id);
-      if (context.mounted) Navigator.of(context).pop();
+      try {
+        final notifier = ref.read(subscriptionControllerProvider.notifier);
+        await notifier.removeSubscription(currentSub.id);
+        if (context.mounted) Navigator.of(context).pop();
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to delete: $e')),
+          );
+        }
+      }
     }
   }
 }

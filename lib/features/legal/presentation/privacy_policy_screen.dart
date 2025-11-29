@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
+import 'package:flutter_html/flutter_html.dart';
+import '../../../core/ads/banner_ad_widget.dart';
 import '../../../core/responsive/responsive_helper.dart';
 
 class PrivacyPolicyScreen extends StatelessWidget {
@@ -16,7 +18,15 @@ class PrivacyPolicyScreen extends StatelessWidget {
             tooltip: 'Copy to clipboard',
             onPressed: () async {
               final policy = await _loadPrivacyPolicy();
-              await Clipboard.setData(ClipboardData(text: policy));
+              // Extract plain text from HTML for clipboard
+              final plainText = policy
+                  .replaceAll(RegExp(r'<[^>]*>'), '')
+                  .replaceAll('&nbsp;', ' ')
+                  .replaceAll('&amp;', '&')
+                  .replaceAll('&lt;', '<')
+                  .replaceAll('&gt;', '>')
+                  .replaceAll('&quot;', '"');
+              await Clipboard.setData(ClipboardData(text: plainText));
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
@@ -47,11 +57,65 @@ class PrivacyPolicyScreen extends StatelessWidget {
             );
           }
 
-          final formattedText = _formatText(
-              context, snapshot.data ?? 'Privacy Policy not available');
           return SingleChildScrollView(
             padding: EdgeInsets.all(ResponsiveHelper.spacing(16)),
-            child: formattedText,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Html(
+                  data: snapshot.data ?? '<p>Privacy Policy not available</p>',
+                  style: {
+                    'body': Style(
+                      margin: Margins.zero,
+                      padding: HtmlPaddings.zero,
+                    ),
+                    'h1': Style(
+                      fontSize: FontSize(28),
+                      fontWeight: FontWeight.bold,
+                      margin: Margins.only(bottom: 16, top: 24),
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                    'h2': Style(
+                      fontSize: FontSize(24),
+                      fontWeight: FontWeight.bold,
+                      margin: Margins.only(bottom: 12, top: 20),
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                    'h3': Style(
+                      fontSize: FontSize(20),
+                      fontWeight: FontWeight.bold,
+                      margin: Margins.only(bottom: 8, top: 16),
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                    'p': Style(
+                      fontSize: FontSize(16),
+                      lineHeight: LineHeight(1.6),
+                      margin: Margins.only(bottom: 12, top: 8),
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                    'ul': Style(
+                      margin: Margins.only(bottom: 12, left: 20),
+                    ),
+                    'li': Style(
+                      fontSize: FontSize(16),
+                      lineHeight: LineHeight(1.6),
+                      margin: Margins.only(bottom: 8),
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                    'strong': Style(
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
+                    'em': Style(
+                      fontStyle: FontStyle.italic,
+                    ),
+                  },
+                ),
+                SizedBox(height: ResponsiveHelper.spacing(24)),
+                const BannerAdWidget(),
+                SizedBox(height: ResponsiveHelper.spacing(16)),
+              ],
+            ),
           );
         },
       ),
@@ -59,251 +123,184 @@ class PrivacyPolicyScreen extends StatelessWidget {
   }
 
   Future<String> _loadPrivacyPolicy() async {
-    try {
-      return _getEmbeddedPrivacyPolicy();
-    } catch (e) {
-      // Fallback to embedded text if file not found
-      return _getEmbeddedPrivacyPolicy();
-    }
-  }
-
-  Widget _formatText(BuildContext context, String markdown) {
-    // Convert markdown to formatted Flutter widgets with proper paragraphing
-    final lines = markdown.split('\n');
-    final widgets = <Widget>[];
-
-    for (int i = 0; i < lines.length; i++) {
-      final line = lines[i].trim();
-      if (line.isEmpty) {
-        widgets.add(const SizedBox(height: 12));
-        continue;
-      }
-
-      // Headers
-      if (line.startsWith('### ')) {
-        widgets.add(
-          Padding(
-            padding: const EdgeInsets.only(top: 16, bottom: 8),
-            child: SelectableText(
-              line.substring(4),
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-            ),
-          ),
-        );
-      } else if (line.startsWith('## ')) {
-        widgets.add(
-          Padding(
-            padding: const EdgeInsets.only(top: 20, bottom: 10),
-            child: SelectableText(
-              line.substring(3),
-              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-            ),
-          ),
-        );
-      } else if (line.startsWith('# ')) {
-        widgets.add(
-          Padding(
-            padding: const EdgeInsets.only(top: 24, bottom: 12),
-            child: SelectableText(
-              line.substring(2),
-              style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-            ),
-          ),
-        );
-      }
-      // Bullet points
-      else if (line.startsWith('- ')) {
-        widgets.add(
-          Padding(
-            padding: const EdgeInsets.only(left: 16, top: 4, bottom: 4),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('• ', style: TextStyle(fontSize: 16)),
-                Expanded(
-                  child: SelectableText(
-                    _removeMarkdownFormatting(line.substring(2)),
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      }
-      // Regular paragraphs
-      else {
-        final cleanText = _removeMarkdownFormatting(line);
-        if (cleanText.isNotEmpty && !cleanText.startsWith('---')) {
-          widgets.add(
-            Padding(
-              padding: const EdgeInsets.only(top: 8, bottom: 8),
-              child: SelectableText(
-                cleanText,
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-            ),
-          );
-        }
-      }
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: widgets,
-    );
-  }
-
-  String _removeMarkdownFormatting(String text) {
-    return text
-        .replaceAll(RegExp(r'\*\*(.+?)\*\*', dotAll: true), r'$1') // Bold
-        .replaceAll(RegExp(r'\*(.+?)\*', dotAll: true), r'$1') // Italic
-        .replaceAll(RegExp(r'\[(.+?)\]\(.+?\)', dotAll: true), r'$1') // Links
-        .replaceAll(RegExp(r'`(.+?)`', dotAll: true), r'$1') // Inline code
-        .trim();
+    return _getEmbeddedPrivacyPolicy();
   }
 
   String _getEmbeddedPrivacyPolicy() {
     return '''
-# Privacy Policy
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+</head>
+<body>
+<h1>Privacy Policy</h1>
 
-**Last Updated: December 2024**
+<p><strong>Last Updated: December 2024</strong></p>
 
-## Introduction
+<h2>Introduction</h2>
 
-Subscriptions ("we," "our," or "us") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our mobile application.
+<p>Subscriptions ("we," "our," or "us") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our mobile application.</p>
 
-## Information We Collect
+<h2>Information We Collect</h2>
 
-### Information You Provide
+<h3>Information You Provide</h3>
 
-- **Subscription Data**: Service names, costs, renewal dates, billing cycles, categories, payment methods, and notes you enter manually
-- **Account Information**: Email address and password (for cloud sync features) - stored securely and encrypted
-- **Receipt/Invoice Data**: Images and documents you upload for OCR processing - processed locally on your device
-- **Email Content**: Email messages you choose to scan (only when you explicitly grant permission and provide credentials)
-- **SMS Content**: SMS messages you choose to scan (Android only, only when you explicitly grant permission)
+<ul>
+<li><strong>Subscription Data</strong>: Service names, costs, renewal dates, billing cycles, categories, payment methods, and notes you enter manually</li>
+<li><strong>Account Information</strong>: Email address and password (for cloud sync features) - stored securely and encrypted</li>
+<li><strong>Receipt/Invoice Data</strong>: Images and documents you upload for OCR processing - processed locally on your device</li>
+<li><strong>Email Content</strong>: Email messages you choose to scan (only when you explicitly grant permission and provide credentials)</li>
+<li><strong>SMS Content</strong>: SMS messages you choose to scan (Android only, only when you explicitly grant permission)</li>
+</ul>
 
-### Automatically Collected Information
+<h3>Automatically Collected Information</h3>
 
-- **Device Information**: Device type, operating system version, app version
-- **Usage Data**: App features used, error logs (for debugging)
-- **Analytics**: Anonymous usage statistics to improve app performance
+<ul>
+<li><strong>Device Information</strong>: Device type, operating system version, app version</li>
+<li><strong>Usage Data</strong>: App features used, error logs (for debugging)</li>
+<li><strong>Analytics</strong>: Anonymous usage statistics to improve app performance</li>
+</ul>
 
-### Third-Party Services
+<h3>Third-Party Services</h3>
 
-- **Google Mobile Ads**: We use AdMob for advertising. AdMob may collect device identifiers and usage data.
-- **Firebase**: We use Firebase for cloud sync and authentication.
+<ul>
+<li><strong>Google Mobile Ads</strong>: We use AdMob for advertising. AdMob may collect device identifiers and usage data.</li>
+<li><strong>Firebase</strong>: We use Firebase for cloud sync and authentication.</li>
+</ul>
 
-## How We Use Your Information
+<h2>How We Use Your Information</h2>
 
-We use the information we collect to:
+<p>We use the information we collect to:</p>
 
-- **Provide Core Services**: Manage and track your subscriptions, send reminders, generate analytics
-- **Email/SMS Scanning**: Parse emails and SMS messages to automatically detect subscriptions (only with your explicit permission)
-- **Receipt OCR**: Extract subscription details from receipts and invoices you upload
-- **Cloud Sync**: Synchronize your subscription data across devices (only if you enable this feature)
-- **Improve Services**: Analyze usage patterns to enhance app functionality
-- **Advertising**: Display relevant ads through Google Mobile Ads
+<ul>
+<li><strong>Provide Core Services</strong>: Manage and track your subscriptions, send reminders, generate analytics</li>
+<li><strong>Email/SMS Scanning</strong>: Parse emails and SMS messages to automatically detect subscriptions (only with your explicit permission)</li>
+<li><strong>Receipt OCR</strong>: Extract subscription details from receipts and invoices you upload</li>
+<li><strong>Cloud Sync</strong>: Synchronize your subscription data across devices (only if you enable this feature)</li>
+<li><strong>Improve Services</strong>: Analyze usage patterns to enhance app functionality</li>
+<li><strong>Advertising</strong>: Display relevant ads through Google Mobile Ads</li>
+</ul>
 
-## Data Storage and Security
+<h2>Data Storage and Security</h2>
 
-### Local Storage
+<h3>Local Storage</h3>
 
-- All subscription data is stored locally on your device using encrypted storage
-- Email credentials are stored in memory only during active sessions and never persisted
-- Receipt images are processed locally and not uploaded to our servers
+<ul>
+<li>All subscription data is stored locally on your device using encrypted storage</li>
+<li>Email credentials are stored in memory only during active sessions and never persisted</li>
+<li>Receipt images are processed locally and not uploaded to our servers</li>
+</ul>
 
-### Cloud Storage (Optional)
+<h3>Cloud Storage (Optional)</h3>
 
-- If you enable cloud sync, your subscription data is stored in Firebase (encrypted at rest)
-- You can disable cloud sync at any time
-- You can delete your cloud data at any time through the app settings
+<ul>
+<li>If you enable cloud sync, your subscription data is stored in Firebase (encrypted at rest)</li>
+<li>You can disable cloud sync at any time</li>
+<li>You can delete your cloud data at any time through the app settings</li>
+</ul>
 
-### Security Measures
+<h3>Security Measures</h3>
 
-- Encryption of sensitive data
-- Secure authentication for cloud sync
-- No transmission of email/SMS credentials to our servers
-- Regular security audits
+<ul>
+<li>Encryption of sensitive data</li>
+<li>Secure authentication for cloud sync</li>
+<li>No transmission of email/SMS credentials to our servers</li>
+<li>Regular security audits</li>
+</ul>
 
-## Data Sharing and Disclosure
+<h2>Data Sharing and Disclosure</h2>
 
-We do **NOT** sell your personal information. We may share data only in these circumstances:
+<p>We do NOT sell your personal information. We may share data only in these circumstances:</p>
 
-- **With Your Consent**: When you explicitly authorize sharing
-- **Service Providers**: Trusted third parties who assist in operating our app (Firebase, Google Ads) - they are bound by confidentiality agreements
-- **Legal Requirements**: When required by law or to protect our rights
-- **Business Transfers**: In case of merger, acquisition, or sale of assets (with notice to users)
+<ul>
+<li><strong>With Your Consent</strong>: When you explicitly authorize sharing</li>
+<li><strong>Service Providers</strong>: Trusted third parties who assist in operating our app (Firebase, Google Ads) - they are bound by confidentiality agreements</li>
+<li><strong>Legal Requirements</strong>: When required by law or to protect our rights</li>
+<li><strong>Business Transfers</strong>: In case of merger, acquisition, or sale of assets (with notice to users)</li>
+</ul>
 
-## Your Rights and Choices
+<h2>Your Rights and Choices</h2>
 
-### Access and Control
+<h3>Access and Control</h3>
 
-- **View Your Data**: Access all your subscription data within the app
-- **Edit Data**: Modify or delete any subscription entry
-- **Export Data**: Export your subscription data in standard formats
-- **Delete Account**: Delete all your data (local and cloud) at any time
+<ul>
+<li><strong>View Your Data</strong>: Access all your subscription data within the app</li>
+<li><strong>Edit Data</strong>: Modify or delete any subscription entry</li>
+<li><strong>Export Data</strong>: Export your subscription data in standard formats</li>
+<li><strong>Delete Account</strong>: Delete all your data (local and cloud) at any time</li>
+</ul>
 
-### Permissions
+<h3>Permissions</h3>
 
-- **Email Access**: Only used when you explicitly grant permission and provide credentials. You can revoke access at any time.
-- **SMS Access**: Only used when you explicitly grant permission (Android). You can revoke access at any time.
-- **Camera/Photos**: Only used for receipt upload. You can deny this permission.
-- **Notifications**: Used for subscription reminders. You can disable in app settings.
+<ul>
+<li><strong>Email Access</strong>: Only used when you explicitly grant permission and provide credentials. You can revoke access at any time.</li>
+<li><strong>SMS Access</strong>: Only used when you explicitly grant permission (Android). You can revoke access at any time.</li>
+<li><strong>Camera/Photos</strong>: Only used for receipt upload. You can deny this permission.</li>
+<li><strong>Notifications</strong>: Used for subscription reminders. You can disable in app settings.</li>
+</ul>
 
-### Opt-Out Options
+<h3>Opt-Out Options</h3>
 
-- Disable cloud sync
-- Disable email/SMS scanning
-- Disable analytics (through device settings)
-- Disable personalized ads (through device settings)
+<ul>
+<li>Disable cloud sync</li>
+<li>Disable email/SMS scanning</li>
+<li>Disable analytics (through device settings)</li>
+<li>Disable personalized ads (through device settings)</li>
+</ul>
 
-## Children's Privacy
+<h2>Children's Privacy</h2>
 
-Our app is not intended for children under 13 years of age. We do not knowingly collect personal information from children under 13. If you believe we have collected information from a child under 13, please contact us immediately.
+<p>Our app is not intended for children under 13 years of age. We do not knowingly collect personal information from children under 13. If you believe we have collected information from a child under 13, please contact us immediately.</p>
 
-## International Data Transfers
+<h2>International Data Transfers</h2>
 
-If you use cloud sync, your data may be stored on servers located outside your country. We ensure appropriate safeguards are in place to protect your data in accordance with this Privacy Policy.
+<p>If you use cloud sync, your data may be stored on servers located outside your country. We ensure appropriate safeguards are in place to protect your data in accordance with this Privacy Policy.</p>
 
-## Data Retention
+<h2>Data Retention</h2>
 
-- **Local Data**: Stored on your device until you delete it or uninstall the app
-- **Cloud Data**: Retained until you delete your account or disable cloud sync
-- **Email/SMS Credentials**: Not stored - only used during active scanning sessions
-- **Receipt Images**: Processed locally and not retained after processing
+<ul>
+<li><strong>Local Data</strong>: Stored on your device until you delete it or uninstall the app</li>
+<li><strong>Cloud Data</strong>: Retained until you delete your account or disable cloud sync</li>
+<li><strong>Email/SMS Credentials</strong>: Not stored - only used during active scanning sessions</li>
+<li><strong>Receipt Images</strong>: Processed locally and not retained after processing</li>
+</ul>
 
-## Changes to This Privacy Policy
+<h2>Changes to This Privacy Policy</h2>
 
-We may update this Privacy Policy from time to time. We will notify you of any changes by:
-- Posting the new Privacy Policy in the app
-- Updating the "Last Updated" date
-- For significant changes, we may provide additional notice
+<p>We may update this Privacy Policy from time to time. We will notify you of any changes by:</p>
 
-## Contact Us
+<ul>
+<li>Posting the new Privacy Policy in the app</li>
+<li>Updating the "Last Updated" date</li>
+<li>For significant changes, we may provide additional notice</li>
+</ul>
 
-If you have questions about this Privacy Policy or our data practices, please contact us:
+<h2>Contact Us</h2>
 
-- **Email**: privacy@subscriptions.app
-- **Address**: [Your Company Address]
+<p>If you have questions about this Privacy Policy or our data practices, please contact us:</p>
 
-## Compliance
+<ul>
+<li><strong>Email</strong>: privacy@subscriptions.app</li>
+<li><strong>Address</strong>: [Your Company Address]</li>
+</ul>
 
-This Privacy Policy complies with:
-- General Data Protection Regulation (GDPR) - EU users
-- California Consumer Privacy Act (CCPA) - California users
-- Children's Online Privacy Protection Act (COPPA) - US users
-- Other applicable data protection laws
+<h2>Compliance</h2>
 
----
+<p>This Privacy Policy complies with:</p>
 
-**By using Subscriptions, you acknowledge that you have read and understood this Privacy Policy.**
+<ul>
+<li>General Data Protection Regulation (GDPR) - EU users</li>
+<li>California Consumer Privacy Act (CCPA) - California users</li>
+<li>Children's Online Privacy Protection Act (COPPA) - US users</li>
+<li>Other applicable data protection laws</li>
+</ul>
+
+<hr>
+
+<p><strong>By using Subscriptions, you acknowledge that you have read and understood this Privacy Policy.</strong></p>
+</body>
+</html>
 ''';
   }
 }

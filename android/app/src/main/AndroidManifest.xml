@@ -25,7 +25,7 @@
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
 
     <application
-        android:label="Subscriptions"
+        android:label="SubsWatcher"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
 

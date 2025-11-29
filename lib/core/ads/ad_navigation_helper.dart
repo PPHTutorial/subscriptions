@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
+import '../config/dev_config.dart';
+import '../premium/premium_provider.dart';
 import 'interstitial_ad_service.dart';
 import 'rewarded_ad_service.dart';
 import 'rewarded_interstitial_ad_service.dart';
@@ -27,8 +30,28 @@ class AdNavigationHelper {
   /// Show interstitial ad before navigation, then execute callback
   static Future<void> showInterstitialBeforeNavigation(
     BuildContext context,
-    VoidCallback onComplete,
-  ) async {
+    VoidCallback onComplete, {
+    WidgetRef? ref,
+  }) async {
+    // Don't show ads in dev mode or for premium users
+    if (!DevConfig.shouldShowAds) {
+      if (context.mounted) onComplete();
+      return;
+    }
+
+    // Check premium status if ref is provided
+    if (ref != null) {
+      try {
+        final isPremium = await ref.read(premiumStatusProvider.future);
+        if (isPremium) {
+          if (context.mounted) onComplete();
+          return;
+        }
+      } catch (e) {
+        // Continue to show ad if check fails
+      }
+    }
+
     if (_interstitialService.isLoaded) {
       await _interstitialService.show();
       // Reload for next time

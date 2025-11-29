@@ -1,18 +1,34 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import '../../../../core/config/app_config.dart';
 import '../../../subscriptions/domain/subscription.dart';
 
-/// Service for syncing subscriptions across devices using Firebase
+/// Service for syncing subscriptions across devices
 class CloudSyncService {
   final FirebaseAuth _firebaseAuth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
+  // Make _firebaseAuth accessible for UI
+  FirebaseAuth get firebaseAuth => _firebaseAuth;
+
   CloudSyncService() {
-    // Note: Firebase configuration check is done at runtime
-    // The service will work once Firebase is initialized in main.dart
-    // and firebase_options.dart is generated via flutterfire configure
+    // Verify Firebase is initialized and Cloud Sync is enabled
+    if (!AppConfig.isFirebaseConfigured || !AppConfig.enableCloudSync) {
+      throw Exception(
+        'Cloud Sync is not available. Firebase must be configured and enabled.',
+      );
+    }
+
+    // Verify Firebase app is initialized
+    try {
+      Firebase.app(); // This will throw if Firebase is not initialized
+    } catch (e) {
+      throw Exception(
+        'Firebase is not initialized. Make sure Firebase.initializeApp() is called in main().',
+      );
+    }
   }
 
   /// Sign in with Google
@@ -76,14 +92,14 @@ class CloudSyncService {
       }
 
       return false;
-    } on FirebaseAuthException catch (e) {
+    } on FirebaseAuthException {
       // Handle Firebase-specific errors
       // Error codes: account-exists-with-different-credential, invalid-credential, operation-not-allowed
       return false;
-    } on Exception catch (e) {
+    } on Exception {
       // Handle other errors (network, configuration, etc.)
       return false;
-    } catch (e) {
+    } catch (_) {
       // Catch-all for any other errors
       return false;
     }

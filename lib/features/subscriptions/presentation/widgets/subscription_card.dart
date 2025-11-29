@@ -22,31 +22,16 @@ class SubscriptionCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    final isDark = theme.brightness == Brightness.dark;
 
-    // Use theme card color by default, or custom accentColor if set
-    final cardColor = subscription.accentColor != null
-        ? Color(subscription.accentColor!)
-        : theme.cardColor;
+    // Use dark version of primary color for card background
+    final cardColor = colorScheme.surface; // _darkenColor(colorScheme.primary);
 
-    // Use primary color for accent elements
-    final accentColor = subscription.accentColor != null
-        ? Color(subscription.accentColor!)
-        : colorScheme.primary;
+    // Text color - use onPrimary for contrast with dark primary background
+    final textColor = colorScheme.onSurface;
 
-    // Text color based on theme
-    final textColor = subscription.accentColor != null
-        ? (ThemeData.estimateBrightnessForColor(cardColor) == Brightness.dark
-            ? Colors.white
-            : Colors.black87)
-        : colorScheme.onSurface;
-
-    // Subtle border for theme-based cards
-    final borderColor = subscription.accentColor == null
-        ? (isDark
-            ? colorScheme.outline.withOpacity(0.15)
-            : colorScheme.outline.withOpacity(0.1))
-        : Colors.transparent;
+    // Check if subscription is upcoming (5 days or less)
+    final daysUntilRenewal = _daysUntilRenewal(subscription);
+    final isUpcoming = daysUntilRenewal != null && daysUntilRenewal <= 5;
 
     return GestureDetector(
       onTap: onTap ??
@@ -64,39 +49,104 @@ class SubscriptionCard extends ConsumerWidget {
         margin: const EdgeInsets.symmetric(vertical: 8),
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
-          color: cardColor,
+          color: Theme.of(context).brightness == Brightness.dark
+              ? const Color(0xFF1E293B)
+              : cardColor,
           borderRadius: BorderRadius.circular(24),
-          border: subscription.accentColor == null
-              ? Border.all(color: borderColor, width: 1)
-              : null,
+          border: Border.all(
+            color: theme.colorScheme.primary.withOpacity(0.1),
+            width: 2,
+          ),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
-                CircleAvatar(
-                  radius: 20,
-                  backgroundColor: subscription.accentColor != null
-                      ? textColor.withOpacity(0.12)
-                      : accentColor.withOpacity(0.12),
-                  child: Text(
-                    subscription.serviceName.characters.first.toUpperCase(),
-                    style: TextStyle(
-                      color: subscription.accentColor != null
-                          ? textColor
-                          : accentColor,
-                      fontWeight: FontWeight.bold,
+                Stack(
+                  children: [
+                    CircleAvatar(
+                      radius: 20,
+                      backgroundColor: textColor.withOpacity(0.12),
+                      child: Text(
+                        subscription.serviceName.characters.first.toUpperCase(),
+                        style: TextStyle(
+                          color: textColor,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
-                  ),
+                    if (isUpcoming)
+                      Positioned(
+                        right: 0,
+                        top: 0,
+                        child: Container(
+                          width: 12,
+                          height: 12,
+                          decoration: BoxDecoration(
+                            color: colorScheme.error,
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: cardColor,
+                              width: 2,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: Text(
-                    subscription.serviceName,
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          color: textColor,
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          subscription.serviceName,
+                          style:
+                              Theme.of(context).textTheme.titleLarge?.copyWith(
+                                    color: textColor,
+                                  ),
                         ),
+                      ),
+                      if (isUpcoming)
+                        Container(
+                          margin: const EdgeInsets.only(left: 8),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: colorScheme.error.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.warning_rounded,
+                                size: 14,
+                                color: colorScheme.error,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                daysUntilRenewal == 0
+                                    ? 'Today'
+                                    : daysUntilRenewal == 1
+                                        ? 'Tomorrow'
+                                        : '$daysUntilRenewal days',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodySmall
+                                    ?.copyWith(
+                                      color: colorScheme.error,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 11,
+                                    ),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
                   ),
                 ),
                 IconButton(
@@ -104,9 +154,7 @@ class SubscriptionCard extends ConsumerWidget {
                     subscription.autoRenew
                         ? Icons.autorenew_rounded
                         : Icons.sync_disabled_rounded,
-                    color: subscription.accentColor != null
-                        ? textColor
-                        : accentColor,
+                    color: textColor,
                   ),
                   onPressed: () => ref
                       .read(subscriptionControllerProvider.notifier)
@@ -169,26 +217,20 @@ class SubscriptionCard extends ConsumerWidget {
                   context,
                   icon: Icons.category_rounded,
                   label: subscription.category.name,
-                  color: subscription.accentColor != null
-                      ? textColor
-                      : accentColor,
+                  color: textColor,
                 ),
                 _buildChip(
                   context,
                   icon: Icons.payment_rounded,
                   label: subscription.paymentMethod,
-                  color: subscription.accentColor != null
-                      ? textColor
-                      : accentColor,
+                  color: textColor,
                 ),
                 if (subscription.isTrial)
                   _buildChip(
                     context,
                     icon: Icons.bolt_rounded,
                     label: 'Free trial',
-                    color: subscription.accentColor != null
-                        ? textColor
-                        : accentColor,
+                    color: textColor,
                   ),
               ],
             ),
@@ -227,6 +269,14 @@ class SubscriptionCard extends ConsumerWidget {
   }
 
   String _formatDate(DateTime date) => DateFormat('dd MMM, yyyy').format(date);
+
+  int? _daysUntilRenewal(Subscription subscription) {
+    final now = DateTime.now();
+    final renewal = subscription.renewalDate;
+    if (renewal.isBefore(now)) return null;
+    final difference = renewal.difference(now);
+    return difference.inDays;
+  }
 
   void _showCardMenu(BuildContext context, WidgetRef ref) {
     showModalBottomSheet(
@@ -287,6 +337,17 @@ class SubscriptionCard extends ConsumerWidget {
   }
 
   Future<void> _editSubscription(BuildContext context, WidgetRef ref) async {
+    // Get latest subscription from provider
+    final subscriptionsAsync = ref.read(subscriptionControllerProvider);
+    final currentSub = subscriptionsAsync.when(
+      data: (subscriptions) => subscriptions.firstWhere(
+        (s) => s.id == subscription.id,
+        orElse: () => subscription,
+      ),
+      loading: () => subscription,
+      error: (_, __) => subscription,
+    );
+
     final notifier = ref.read(subscriptionControllerProvider.notifier);
 
     await showModalBottomSheet<void>(
@@ -294,22 +355,41 @@ class SubscriptionCard extends ConsumerWidget {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => AddSubscriptionSheet(
-        subscription: subscription,
+        subscription: currentSub,
         onSubmit: (updated) async {
-          await notifier.updateSubscription(updated);
-          if (context.mounted) Navigator.of(context).pop();
+          try {
+            await notifier.updateSubscription(updated);
+            if (context.mounted) Navigator.of(context).pop();
+          } catch (e) {
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Failed to update: $e')),
+              );
+            }
+          }
         },
       ),
     );
   }
 
   Future<void> _deleteSubscription(BuildContext context, WidgetRef ref) async {
+    // Get latest subscription from provider
+    final subscriptionsAsync = ref.read(subscriptionControllerProvider);
+    final currentSub = subscriptionsAsync.when(
+      data: (subscriptions) => subscriptions.firstWhere(
+        (s) => s.id == subscription.id,
+        orElse: () => subscription,
+      ),
+      loading: () => subscription,
+      error: (_, __) => subscription,
+    );
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete Subscription'),
         content: Text(
-          'Are you sure you want to delete ${subscription.serviceName}? This action cannot be undone.',
+          'Are you sure you want to delete ${currentSub.serviceName}? This action cannot be undone.',
         ),
         actions: [
           TextButton(
@@ -328,8 +408,16 @@ class SubscriptionCard extends ConsumerWidget {
     );
 
     if (confirmed == true) {
-      final notifier = ref.read(subscriptionControllerProvider.notifier);
-      await notifier.removeSubscription(subscription.id);
+      try {
+        final notifier = ref.read(subscriptionControllerProvider.notifier);
+        await notifier.removeSubscription(currentSub.id);
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to delete: $e')),
+          );
+        }
+      }
     }
   }
 }

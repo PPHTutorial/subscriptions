@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/ads/banner_ad_widget.dart';
+import '../../../../core/ads/native_ad_widget.dart';
 import '../../../../core/responsive/responsive_helper.dart';
 import '../../../subscriptions/application/subscription_controller.dart';
+import '../../../subscriptions/domain/subscription.dart';
 import '../data/ai_insights_service.dart';
+import 'insight_detail_screen.dart';
 
 class AiInsightsScreen extends ConsumerWidget {
   const AiInsightsScreen({super.key});
@@ -51,7 +55,7 @@ class AiInsightsScreen extends ConsumerWidget {
           }
 
           return FutureBuilder<List<Insight>>(
-            future: insightsService.generateInsights(subscriptions),
+            future: insightsService.generateAiInsights(subscriptions),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Center(child: CircularProgressIndicator());
@@ -96,7 +100,27 @@ class AiInsightsScreen extends ConsumerWidget {
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                   SizedBox(height: ResponsiveHelper.spacing(16)),
-                  ...insights.map((insight) => _InsightCard(insight: insight)),
+                  ...insights.asMap().entries.map((entry) {
+                    final index = entry.key;
+                    final insight = entry.value;
+                    return Column(
+                      children: [
+                        _InsightCard(
+                          insight: insight,
+                          subscriptions: subscriptions,
+                        ),
+                        // Add native ad after every 3 insights
+                        if ((index + 1) % 3 == 0 &&
+                            index < insights.length - 1) ...[
+                          SizedBox(height: ResponsiveHelper.spacing(12)),
+                          const NativeAdWidget(),
+                          SizedBox(height: ResponsiveHelper.spacing(12)),
+                        ],
+                      ],
+                    );
+                  }),
+                  SizedBox(height: ResponsiveHelper.spacing(20)),
+                  const BannerAdWidget(),
                 ],
               );
             },
@@ -109,13 +133,17 @@ class AiInsightsScreen extends ConsumerWidget {
   }
 }
 
-class _InsightCard extends StatelessWidget {
-  const _InsightCard({required this.insight});
+class _InsightCard extends ConsumerWidget {
+  const _InsightCard({
+    required this.insight,
+    required this.subscriptions,
+  });
 
   final Insight insight;
+  final List<Subscription> subscriptions;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     Color? color;
     IconData icon;
 
@@ -163,13 +191,23 @@ class _InsightCard extends StatelessWidget {
             if (insight.actionable && insight.actionLabel != null) ...[
               SizedBox(height: ResponsiveHelper.spacing(12)),
               OutlinedButton(
-                onPressed: () {
-                  // TODO: Navigate to relevant screen
-                },
+                onPressed: () => _handleAction(context, ref),
                 child: Text(insight.actionLabel!),
               ),
             ],
           ],
+        ),
+      ),
+    );
+  }
+
+  void _handleAction(BuildContext context, WidgetRef ref) {
+    // Navigate to detailed insight screen for all actionable insights
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => InsightDetailScreen(
+          insight: insight,
+          allSubscriptions: subscriptions,
         ),
       ),
     );
