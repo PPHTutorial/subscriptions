@@ -77,24 +77,89 @@ class CurrencyConversionService {
   /// Fetch exchange rates from API
   Future<void> _fetchExchangeRates() async {
     try {
-      final response = await http
+      // Always fetch USD rates first to ensure USD is available
+      final usdResponse = await http
           .get(
-            Uri.parse('$_exchangeRateApiUrl$_baseCurrency'),
+            Uri.parse('${_exchangeRateApiUrl}USD'),
           )
           .timeout(const Duration(seconds: 10));
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body) as Map<String, dynamic>;
-        final rates = data['rates'] as Map<String, dynamic>;
+      if (usdResponse.statusCode == 200) {
+        final usdData = jsonDecode(usdResponse.body) as Map<String, dynamic>;
+        final usdRates = usdData['rates'] as Map<String, dynamic>;
 
-        _exchangeRates =
-            rates.map((key, value) => MapEntry(key, (value as num).toDouble()));
+        // If base currency is USD, use USD rates directly
+        if (_baseCurrency == 'USD') {
+          _exchangeRates = usdRates
+              .map((key, value) => MapEntry(key, (value as num).toDouble()));
+          // Ensure USD is always 1.0
+          _exchangeRates['USD'] = 1.0;
+        } else {
+          // Base currency is not USD, fetch rates for base currency
+          final baseResponse = await http
+              .get(
+                Uri.parse('$_exchangeRateApiUrl$_baseCurrency'),
+              )
+              .timeout(const Duration(seconds: 10));
+
+          if (baseResponse.statusCode == 200) {
+            final baseData =
+                jsonDecode(baseResponse.body) as Map<String, dynamic>;
+            final baseRates = baseData['rates'] as Map<String, dynamic>;
+
+            _exchangeRates = baseRates
+                .map((key, value) => MapEntry(key, (value as num).toDouble()));
+            // Ensure base currency is always 1.0
+            _exchangeRates[_baseCurrency] = 1.0;
+
+            // Calculate USD rate from base currency
+            // If base currency rate to USD is available, use it
+            // Otherwise, calculate from USD rates
+            final baseToUsd = _exchangeRates['USD'];
+            if (baseToUsd != null && baseToUsd > 0) {
+              // USD rate is already in the base currency rates
+              // No additional calculation needed
+            } else {
+              // Calculate USD rate from USD rates
+              // Get base currency rate from USD rates
+              final baseFromUsd = usdRates[_baseCurrency];
+              if (baseFromUsd != null && baseFromUsd > 0) {
+                // 1 USD = baseFromUsd baseCurrency
+                // So 1 baseCurrency = 1 / baseFromUsd USD
+                // But we need: 1 USD = ? baseCurrency
+                // Actually: 1 USD = baseFromUsd baseCurrency
+                _exchangeRates['USD'] = baseFromUsd;
+              }
+            }
+          } else {
+            // Fallback: calculate from USD rates
+            final baseFromUsd = usdRates[_baseCurrency];
+            if (baseFromUsd != null && baseFromUsd > 0) {
+              // Convert all USD rates to base currency rates
+              _exchangeRates = usdRates.map((key, value) {
+                final usdRate = (value as num).toDouble();
+                // If key is base currency, it's 1.0
+                if (key == _baseCurrency) {
+                  return MapEntry(key, 1.0);
+                }
+                // Convert: 1 USD = baseFromUsd baseCurrency
+                // So 1 keyCurrency = (usdRate / baseFromUsd) baseCurrency
+                return MapEntry(key, usdRate / baseFromUsd);
+              });
+              // Ensure USD is available
+              _exchangeRates['USD'] = baseFromUsd;
+            } else {
+              _useFallbackRates();
+              return;
+            }
+          }
+        }
+
         _lastUpdate = DateTime.now();
-
         // Cache the rates
         await _saveCachedRates();
       } else {
-        // If API fails, use fallback rates (1:1 for same currency, approximate for others)
+        // If API fails, use fallback rates
         _useFallbackRates();
       }
     } catch (e) {
@@ -105,9 +170,10 @@ class CurrencyConversionService {
 
   /// Use fallback exchange rates when API is unavailable
   void _useFallbackRates() {
-    // Common approximate exchange rates (fallback only)
+    // Common approximate exchange rates relative to USD (fallback only)
     // These are rough estimates and should be updated regularly
-    final fallbackRates = {
+    // Format: 1 USD = X currency
+    final usdRates = {
       'USD': 1.0,
       'EUR': 0.92,
       'GBP': 0.79,
@@ -139,13 +205,23 @@ class CurrencyConversionService {
       'HRK': 7.0,
     };
 
-    // Convert fallback rates to base currency
+    // Convert USD rates to base currency rates
     if (_baseCurrency == 'USD') {
-      _exchangeRates = fallbackRates;
+      _exchangeRates = usdRates;
     } else {
-      final baseRate = fallbackRates[_baseCurrency] ?? 1.0;
-      _exchangeRates =
-          fallbackRates.map((key, value) => MapEntry(key, value / baseRate));
+      final baseFromUsd = usdRates[_baseCurrency] ?? 1.0;
+      // Convert all rates: 1 baseCurrency = (usdRate / baseFromUsd) currency
+      _exchangeRates = usdRates.map((key, value) {
+        if (key == _baseCurrency) {
+          return MapEntry(key, 1.0);
+        }
+        // 1 USD = value currency
+        // 1 USD = baseFromUsd baseCurrency
+        // So 1 baseCurrency = value / baseFromUsd currency
+        return MapEntry(key, value / baseFromUsd);
+      });
+      // Ensure USD is always available
+      _exchangeRates['USD'] = baseFromUsd;
     }
 
     _lastUpdate = DateTime.now();
@@ -170,6 +246,29 @@ class CurrencyConversionService {
 
   /// Convert amount from source currency to base currency
   /// Returns the converted amount in base currency
+  ///
+  /// Exchange rates from the API are stored as: 1 baseCurrency = X currency
+  /// This means the rate tells us how many units of 'currency' equal 1 unit of baseCurrency.
+  ///
+  /// To convert fromCurrency to baseCurrency:
+  /// - If fromCurrency rate is R (meaning 1 baseCurrency = R fromCurrency)
+  /// - Then: amount in fromCurrency / R = amount in baseCurrency
+  ///
+  /// Examples:
+  /// 1. Base = USD, fromCurrency = GHS, amount = 60 GHS
+  ///    - Rate GHS = 12.0 (1 USD = 12 GHS)
+  ///    - Conversion: 60 / 12 = 5 USD ✓
+  ///
+  /// 2. Base = GHS, fromCurrency = USD, amount = 5 USD
+  ///    - When fetching rates for base=GHS, API returns: 1 GHS = 0.083 USD
+  ///    - So rate USD = 0.083 (meaning 1 GHS = 0.083 USD)
+  ///    - To convert 5 USD to GHS: 5 / 0.083 = 60.24 GHS ✓
+  ///    - (Alternatively: 1 USD = 1/0.083 = 12 GHS, so 5 USD = 5 * 12 = 60 GHS)
+  ///
+  /// The formula `amount / fromRate` works correctly because:
+  /// - Rates are always stored relative to baseCurrency
+  /// - If rate R means "1 baseCurrency = R fromCurrency"
+  /// - Then "amount fromCurrency = amount / R baseCurrency"
   Future<double> convertToBase({
     required double amount,
     required String fromCurrency,
@@ -193,8 +292,10 @@ class CurrencyConversionService {
       return amount;
     }
 
-    // Convert: amount in fromCurrency * (1 / fromRate) = amount in baseCurrency
-    // Since rates are relative to base currency
+    // Exchange rates are stored as: 1 baseCurrency = X fromCurrency
+    // So to convert: amount in fromCurrency / rate = amount in baseCurrency
+    // Example: 60 GHS / 12.0 (1 USD = 12 GHS) = 5 USD
+    // Example: 5 USD / 0.083 (1 GHS = 0.083 USD) = 60.24 GHS
     return amount / fromRate;
   }
 
@@ -266,12 +367,32 @@ class CurrencyConversionService {
   }
 
   /// Format currency amount with proper symbol/formatting
+  /// Uses K for thousands and M for millions
   String formatCurrency({
     required double amount,
     required String currencyCode,
   }) {
     final code = currencyCode.toUpperCase();
-    final formattedAmount = amount.toStringAsFixed(2);
+
+    // Format amount with K/M suffixes
+    String formattedAmount;
+    if (amount >= 1000000) {
+      // Millions
+      final millions = amount / 1000000;
+      formattedAmount = millions.toStringAsFixed(millions >= 10 ? 0 : 1);
+      formattedAmount = formattedAmount.replaceAll(RegExp(r'\.0$'), '');
+      formattedAmount = '${formattedAmount}M';
+    } else if (amount >= 1000) {
+      // Thousands
+      final thousands = amount / 1000;
+      formattedAmount = thousands.toStringAsFixed(thousands >= 10 ? 0 : 1);
+      formattedAmount = formattedAmount.replaceAll(RegExp(r'\.0$'), '');
+      formattedAmount = '${formattedAmount}K';
+    } else {
+      // Less than 1000, show with 2 decimal places
+      formattedAmount = amount.toStringAsFixed(2);
+      formattedAmount = formattedAmount.replaceAll(RegExp(r'\.0+$'), '');
+    }
 
     // Get currency info from CurrencyList for proper symbol
     final currencyInfo = CurrencyList.getCurrencyInfo(code);

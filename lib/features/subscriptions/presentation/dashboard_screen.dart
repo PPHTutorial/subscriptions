@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../core/ads/banner_ad_widget.dart';
 import '../../../../core/ads/native_ad_widget.dart';
@@ -9,11 +10,18 @@ import '../../../../core/currency/currency_preferences_provider.dart';
 import '../../../../core/responsive/responsive_helper.dart';
 import '../../advanced/ai_insights/data/ai_insights_service.dart';
 import '../../advanced/ai_insights/presentation/ai_insights_screen.dart';
+import '../../advanced/cloud_sync/data/cloud_sync_provider.dart';
+import '../../advanced/cloud_sync/data/cloud_sync_service.dart';
+import '../../advanced/cloud_sync/presentation/cloud_sync_screen.dart';
+import '../../../core/premium/premium_restrictions.dart';
+import '../../../core/premium/premium_provider.dart';
+import '../../../core/premium/premium_screen.dart';
 import '../application/subscription_controller.dart';
 import '../domain/subscription.dart';
 import 'widgets/analytics_section.dart';
 import 'widgets/insight_card.dart';
 import 'widgets/subscription_card.dart';
+import '../../../core/config/dev_config.dart';
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key, required this.onAddTap});
@@ -131,6 +139,8 @@ class DashboardScreen extends ConsumerWidget {
                           ),
                         ),
                         const SizedBox(height: 24),
+                        _SubscriptionLimitCard(subscriptions: subscriptions),
+                        _CloudSyncSection(subscriptions: subscriptions),
                         _AiInsightsSection(subscriptions: subscriptions),
                         const SizedBox(height: 24),
                         AnalyticsSection(subscriptions: subscriptions),
@@ -544,6 +554,243 @@ class _AiInsightsSection extends ConsumerWidget {
   }
 }
 
+class _CloudSyncSection extends ConsumerStatefulWidget {
+  const _CloudSyncSection({required this.subscriptions});
+
+  final List<Subscription> subscriptions;
+
+  @override
+  ConsumerState<_CloudSyncSection> createState() => _CloudSyncSectionState();
+}
+
+class _CloudSyncSectionState extends ConsumerState<_CloudSyncSection> {
+  bool _autoSyncEnabled = false;
+  bool _isLoadingAutoSync = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAutoSyncPreference();
+  }
+
+  String _getSignInErrorMessage(dynamic error) {
+    final errorString = error.toString().toLowerCase();
+
+    if (errorString.contains('apiException: 10') ||
+        errorString.contains('developer_error')) {
+      return 'Google Sign-In Error: Please add your SHA-1 fingerprint to Firebase Console. See FIREBASE_SETUP.md for instructions.';
+    }
+
+    if (errorString.contains('network') || errorString.contains('connection')) {
+      return 'Network error. Please check your internet connection and try again.';
+    }
+
+    if (errorString.contains('sign_in_failed')) {
+      return 'Sign-in failed. Please check your Firebase configuration.';
+    }
+
+    return 'Sign-in error: ${error.toString()}';
+  }
+
+  Future<void> _loadAutoSyncPreference() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _autoSyncEnabled = prefs.getBool('auto_sync_enabled') ?? false;
+      _isLoadingAutoSync = false;
+    });
+  }
+
+  Future<void> _toggleAutoSync(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('auto_sync_enabled', value);
+    setState(() {
+      _autoSyncEnabled = value;
+    });
+
+    // If enabling auto sync and user is signed in, perform initial sync
+    if (value) {
+      final service = ref.read(cloudSyncServiceProvider);
+      if (service != null && service.isSignedIn) {
+        _performAutoSync(service);
+      }
+    }
+  }
+
+  Future<void> _performAutoSync(CloudSyncService service) async {
+    try {
+      await service.syncSubscriptions(widget.subscriptions);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Auto sync completed'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Auto sync failed: $e'),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final signedInAsync = ref.watch(cloudSyncSignedInProvider);
+    final userEmailAsync = ref.watch(cloudSyncUserEmailProvider);
+    final service = ref.watch(cloudSyncServiceProvider);
+
+    // Don't show if Cloud Sync is not available
+    if (service == null) {
+      return const SizedBox.shrink();
+    }
+
+    return signedInAsync.when(
+      data: (isSignedIn) {
+        if (isSignedIn) {
+          // User is signed in - show user details and auto sync
+          return Card(
+            color: Theme.of(context).colorScheme.primaryContainer,
+            child: Padding(
+              padding: EdgeInsets.all(ResponsiveHelper.spacing(16)),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.cloud_done_rounded,
+                        color: Theme.of(context).colorScheme.onPrimaryContainer,
+                      ),
+                      SizedBox(width: ResponsiveHelper.spacing(12)),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Cloud Sync',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleMedium
+                                  ?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onPrimaryContainer,
+                                  ),
+                            ),
+                            SizedBox(height: ResponsiveHelper.spacing(4)),
+                            userEmailAsync.when(
+                              data: (email) => Text(
+                                email ?? 'Signed in',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodySmall
+                                    ?.copyWith(
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onPrimaryContainer
+                                          .withOpacity(0.8),
+                                    ),
+                              ),
+                              loading: () => const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
+                              ),
+                              error: (_, __) => const SizedBox.shrink(),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.settings_rounded),
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const CloudSyncScreen(),
+                            ),
+                          );
+                        },
+                        tooltip: 'Cloud Sync Settings',
+                        color: Theme.of(context).colorScheme.onPrimaryContainer,
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: ResponsiveHelper.spacing(16)),
+                  SwitchListTile(
+                    title: const Text('Auto Sync'),
+                    subtitle: const Text(
+                      'Automatically sync your subscriptions to the cloud',
+                    ),
+                    value: _autoSyncEnabled,
+                    onChanged: _isLoadingAutoSync
+                        ? null
+                        : (value) => _toggleAutoSync(value),
+                    secondary: Icon(
+                      Icons.sync_rounded,
+                      color: Theme.of(context).colorScheme.onPrimaryContainer,
+                    ),
+                    activeColor:
+                        Theme.of(context).colorScheme.onPrimaryContainer,
+                  ),
+                  SizedBox(height: ResponsiveHelper.spacing(8)),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () async {
+                            final service = ref.read(cloudSyncServiceProvider);
+                            if (service != null && service.isSignedIn) {
+                              await _performAutoSync(service);
+                            }
+                          },
+                          icon: const Icon(Icons.cloud_upload_rounded),
+                          label: const Text('Backup Now'),
+                        ),
+                      ),
+                      SizedBox(width: ResponsiveHelper.spacing(12)),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const CloudSyncScreen(),
+                              ),
+                            );
+                          },
+                          icon: const Icon(Icons.settings_rounded),
+                          label: const Text('Settings'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          );
+        }
+        return const SizedBox.shrink();
+      },
+      loading: () => Card(
+        child: Padding(
+          padding: EdgeInsets.all(ResponsiveHelper.spacing(16)),
+          child: const Center(
+            child: CircularProgressIndicator(),
+          ),
+        ),
+      ),
+      error: (error, _) => const SizedBox.shrink(),
+    );
+  }
+}
+
 class _DashboardInsightCard extends StatelessWidget {
   const _DashboardInsightCard({
     required this.insight,
@@ -558,20 +805,36 @@ class _DashboardInsightCard extends StatelessWidget {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
-    Color? color;
+    Color backgroundColor;
+    Color borderColor;
+    Color iconContainerColor;
+    Color iconColor;
+    Color titleColor;
     IconData icon = Icons.info_rounded;
 
     switch (insight.severity) {
       case InsightSeverity.high:
-        color = colorScheme.errorContainer;
+        backgroundColor = colorScheme.tertiaryContainer;
+        borderColor = colorScheme.tertiary;
+        iconContainerColor = colorScheme.tertiary;
+        iconColor = colorScheme.onTertiaryContainer;
+        titleColor = colorScheme.onTertiaryContainer;
         icon = Icons.warning_rounded;
         break;
       case InsightSeverity.medium:
-        color = colorScheme.primary;
+        backgroundColor = colorScheme.primaryContainer;
+        borderColor = colorScheme.primary;
+        iconContainerColor = colorScheme.primary;
+        iconColor = colorScheme.onPrimaryContainer;
+        titleColor = colorScheme.onPrimaryContainer;
         icon = Icons.info_rounded;
         break;
       case InsightSeverity.low:
-        color = colorScheme.secondary;
+        backgroundColor = colorScheme.secondaryContainer;
+        borderColor = colorScheme.secondary;
+        iconContainerColor = colorScheme.secondary;
+        iconColor = colorScheme.onSecondaryContainer;
+        titleColor = colorScheme.onSecondaryContainer;
         icon = Icons.lightbulb_rounded;
         break;
     }
@@ -583,11 +846,11 @@ class _DashboardInsightCard extends StatelessWidget {
         margin: EdgeInsets.only(bottom: ResponsiveHelper.spacing(12)),
         padding: EdgeInsets.all(ResponsiveHelper.spacing(16)),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.1),
+          color: backgroundColor,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: color.withOpacity(0.3),
-            width: 1,
+            color: borderColor.withOpacity(0.5),
+            width: 1.5,
           ),
         ),
         child: Row(
@@ -596,12 +859,12 @@ class _DashboardInsightCard extends StatelessWidget {
             Container(
               padding: EdgeInsets.all(ResponsiveHelper.spacing(8)),
               decoration: BoxDecoration(
-                color: color.withOpacity(0.2),
+                color: iconContainerColor,
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Icon(
                 icon,
-                color: color,
+                color: iconColor,
                 size: 20,
               ),
             ),
@@ -613,15 +876,15 @@ class _DashboardInsightCard extends StatelessWidget {
                   Text(
                     insight.title,
                     style: theme.textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: color,
+                      fontWeight: FontWeight.bold,
+                      color: titleColor,
                     ),
                   ),
                   SizedBox(height: ResponsiveHelper.spacing(4)),
                   Text(
                     insight.message,
                     style: theme.textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onSurface.withOpacity(0.7),
+                      color: titleColor.withOpacity(0.8),
                     ),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
@@ -631,12 +894,163 @@ class _DashboardInsightCard extends StatelessWidget {
             ),
             Icon(
               Icons.chevron_right_rounded,
-              color: colorScheme.onSurface.withOpacity(0.4),
+              color: titleColor.withOpacity(0.6),
               size: 20,
             ),
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Widget to show remaining subscription slots
+class _SubscriptionLimitCard extends ConsumerWidget {
+  const _SubscriptionLimitCard({required this.subscriptions});
+
+  final List<Subscription> subscriptions;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final premiumStatus = ref.watch(premiumStatusProvider).maybeWhen(
+          data: (premium) => premium,
+          orElse: () => false,
+        );
+
+    // If premium, don't show the limit card
+    if (premiumStatus || DevConfig.isDevModeEnabled) {
+      return const SizedBox.shrink();
+    }
+
+    return FutureBuilder<int>(
+      future: PremiumRestrictions.getRemainingSlots(
+        ref,
+        subscriptions.length,
+      ),
+      builder: (context, snapshot) {
+        final remaining = snapshot.data ?? 0;
+        final currentCount = subscriptions.length;
+        final maxCount = PremiumRestrictions.maxFreeSubscriptions;
+        final percentage = currentCount / maxCount;
+
+        return Card(
+          color: percentage >= 0.8
+              ? Theme.of(context).colorScheme.errorContainer
+              : Theme.of(context).colorScheme.surfaceVariant,
+          child: Padding(
+            padding: EdgeInsets.all(ResponsiveHelper.spacing(16)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      Icons.info_outline_rounded,
+                      color: percentage >= 0.8
+                          ? Theme.of(context).colorScheme.onErrorContainer
+                          : Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                    SizedBox(width: ResponsiveHelper.spacing(12)),
+                    Expanded(
+                      child: Text(
+                        'Subscription Limit',
+                        style:
+                            Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  color: percentage >= 0.8
+                                      ? Theme.of(context)
+                                          .colorScheme
+                                          .onErrorContainer
+                                      : Theme.of(context)
+                                          .colorScheme
+                                          .onSurfaceVariant,
+                                ),
+                      ),
+                    ),
+                  ],
+                ),
+                SizedBox(height: ResponsiveHelper.spacing(12)),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '$currentCount / $maxCount subscriptions',
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleLarge
+                                ?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  color: percentage >= 0.8
+                                      ? Theme.of(context)
+                                          .colorScheme
+                                          .onErrorContainer
+                                      : Theme.of(context)
+                                          .colorScheme
+                                          .onSurfaceVariant,
+                                ),
+                          ),
+                          SizedBox(height: ResponsiveHelper.spacing(4)),
+                          Text(
+                            remaining > 0
+                                ? '$remaining slot${remaining > 1 ? 's' : ''} remaining'
+                                : 'Limit reached',
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodyMedium
+                                ?.copyWith(
+                                  color: percentage >= 0.8
+                                      ? Theme.of(context)
+                                          .colorScheme
+                                          .onErrorContainer
+                                          .withOpacity(0.8)
+                                      : Theme.of(context)
+                                          .colorScheme
+                                          .onSurfaceVariant
+                                          .withOpacity(0.8),
+                                ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (remaining == 0)
+                      FilledButton.icon(
+                        onPressed: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => const PremiumScreen(),
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.star_rounded),
+                        label: const Text('Upgrade'),
+                      ),
+                  ],
+                ),
+                SizedBox(height: ResponsiveHelper.spacing(12)),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: LinearProgressIndicator(
+                    value: percentage,
+                    minHeight: 8,
+                    backgroundColor: Theme.of(context)
+                        .colorScheme
+                        .onSurfaceVariant
+                        .withOpacity(0.2),
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      percentage >= 0.8
+                          ? Theme.of(context).colorScheme.onErrorContainer
+                          : Theme.of(context).colorScheme.primary,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }

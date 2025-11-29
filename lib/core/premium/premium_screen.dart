@@ -83,27 +83,27 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen> {
                 ),
           ),
           SizedBox(height: ResponsiveHelper.spacing(16)),
-          _FeatureItem(
+          const _FeatureItem(
             icon: Icons.block_rounded,
             title: 'Ad-free experience',
             description: 'No banner, interstitial, or native ads',
           ),
-          _FeatureItem(
+          const _FeatureItem(
             icon: Icons.all_inclusive_rounded,
             title: 'Unlimited subscriptions',
             description: 'Add as many subscriptions as you need',
           ),
-          _FeatureItem(
+          const _FeatureItem(
             icon: Icons.cloud_sync_rounded,
             title: 'Cloud sync',
             description: 'Sync across all your devices',
           ),
-          _FeatureItem(
+          const _FeatureItem(
             icon: Icons.psychology_rounded,
             title: 'Advanced AI insights',
             description: 'Get detailed analytics and recommendations',
           ),
-          _FeatureItem(
+          const _FeatureItem(
             icon: Icons.download_rounded,
             title: 'Export data',
             description: 'Export your subscriptions to CSV/PDF',
@@ -126,7 +126,6 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen> {
             currencySymbol: currencySymbol,
             onTap: () => setState(() => _selectedTier = PremiumTier.monthly),
           ),
-          SizedBox(height: ResponsiveHelper.spacing(12)),
 
           // Quarterly
           _PricingCard(
@@ -136,8 +135,16 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen> {
             onTap: () => setState(() => _selectedTier = PremiumTier.quarterly),
             showSavings: true,
           ),
-          SizedBox(height: ResponsiveHelper.spacing(12)),
 
+          // Half Yearlyf
+          _PricingCard(
+            tier: PremiumTier.half_yearly,
+            isSelected: _selectedTier == PremiumTier.half_yearly,
+            currencySymbol: currencySymbol,
+            onTap: () =>
+                setState(() => _selectedTier = PremiumTier.half_yearly),
+            showSavings: true,
+          ),
           // Yearly (Recommended)
           _PricingCard(
             tier: PremiumTier.yearly,
@@ -146,16 +153,6 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen> {
             onTap: () => setState(() => _selectedTier = PremiumTier.yearly),
             showSavings: true,
             isRecommended: true,
-          ),
-          SizedBox(height: ResponsiveHelper.spacing(12)),
-
-          // Lifetime
-          _PricingCard(
-            tier: PremiumTier.lifetime,
-            isSelected: _selectedTier == PremiumTier.lifetime,
-            currencySymbol: currencySymbol,
-            onTap: () => setState(() => _selectedTier = PremiumTier.lifetime),
-            showSavings: true,
           ),
           SizedBox(height: ResponsiveHelper.spacing(24)),
 
@@ -211,11 +208,11 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen> {
           case PremiumTier.quarterly:
             expiry = DateTime.now().add(const Duration(days: 90));
             break;
+          case PremiumTier.half_yearly:
+            expiry = DateTime.now().add(const Duration(days: 180));
+            break;
           case PremiumTier.yearly:
             expiry = DateTime.now().add(const Duration(days: 365));
-            break;
-          case PremiumTier.lifetime:
-            expiry = null; // No expiry
             break;
         }
 
@@ -353,6 +350,9 @@ class _PricingCard extends StatelessWidget {
     final displayPrice = PremiumPricing.getDisplayPrice(tier, currencySymbol);
 
     return Card(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
       color: isSelected ? Theme.of(context).colorScheme.primaryContainer : null,
       child: InkWell(
         onTap: onTap,

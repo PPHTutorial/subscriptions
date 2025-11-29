@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../../../core/currency/currency_conversion_service.dart';
+import '../../../../core/currency/currency_preferences_provider.dart';
 import '../../application/subscription_controller.dart';
 import '../../domain/subscription.dart';
 import '../subscription_details_screen.dart';
@@ -171,12 +173,45 @@ class SubscriptionCard extends ConsumerWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        '${subscription.currencyCode} ${subscription.cost.toStringAsFixed(2)}',
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                              color: textColor,
-                              fontSize: 24,
-                            ),
+                      FutureBuilder<double>(
+                        future: _getConvertedCost(subscription, ref),
+                        builder: (context, snapshot) {
+                          final currencyService =
+                              ref.read(currencyConversionServiceProvider);
+                          final convertedCost = snapshot.data;
+
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                convertedCost != null
+                                    ? currencyService.formatCurrency(
+                                        amount: convertedCost,
+                                        currencyCode:
+                                            currencyService.baseCurrency,
+                                      )
+                                    : '${subscription.currencyCode} ${subscription.cost.toStringAsFixed(2)}',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleLarge
+                                    ?.copyWith(
+                                      color: textColor,
+                                      fontSize: 24,
+                                    ),
+                              ),
+                              // Always show original currency and amount in faint color
+                              Text(
+                                '${subscription.currencyCode} ${subscription.cost.toStringAsFixed(2)}',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodySmall
+                                    ?.copyWith(
+                                      color: textColor.withOpacity(0.4),
+                                    ),
+                              ),
+                            ],
+                          );
+                        },
                       ),
                       const SizedBox(height: 6),
                       Text(
@@ -237,6 +272,15 @@ class SubscriptionCard extends ConsumerWidget {
           ],
         ),
       ),
+    );
+  }
+
+  Future<double> _getConvertedCost(
+      Subscription subscription, WidgetRef ref) async {
+    final currencyService = ref.read(currencyConversionServiceProvider);
+    return await currencyService.convertToBase(
+      amount: subscription.cost,
+      fromCurrency: subscription.currencyCode,
     );
   }
 

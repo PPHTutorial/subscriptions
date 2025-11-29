@@ -372,26 +372,18 @@ class ReceiptOcrService {
         costMatch?['currency'] as String? ?? _extractCurrency(text, lowerText);
     final originalCost = costMatch?['cost'] as double?;
 
-    // Convert to base currency to prevent over/under-population due to currency gaps
-    double? convertedCost;
+    // Use original currency and cost - don't convert during save
+    // Conversion will happen only when displaying for analytics
+    double? finalCost = originalCost;
     String finalCurrency;
 
     if (originalCost != null && originalCurrency.isNotEmpty) {
-      try {
-        final baseCurrency = _currencyService.baseCurrency;
-        convertedCost = await _currencyService.convertToBase(
-          amount: originalCost,
-          fromCurrency: originalCurrency,
-        );
-        finalCurrency = baseCurrency;
-      } catch (e) {
-        // If conversion fails, use original amount and currency
-        convertedCost = originalCost;
-        finalCurrency = originalCurrency;
-      }
+      // Use original currency and cost as-is
+      finalCost = originalCost;
+      finalCurrency = originalCurrency;
     } else if (originalCost != null) {
       // If we have cost but no currency, use base currency
-      convertedCost = originalCost;
+      finalCost = originalCost;
       finalCurrency = _currencyService.baseCurrency;
     } else {
       finalCurrency = _currencyService.baseCurrency;
@@ -402,26 +394,26 @@ class ReceiptOcrService {
 
     // More lenient validation - if we have high confidence in subscription relevance,
     // we can be more flexible with required fields
-    if (serviceName == null && convertedCost == null) {
+    if (serviceName == null && finalCost == null) {
       return ReceiptExtractionResult(
         success: false,
         error:
-            'Could not extract required information (Service: ${serviceName != null ? "✓" : "✗"}, Amount: ${convertedCost != null ? "✓" : "✗"})',
+            'Could not extract required information (Service: ${serviceName != null ? "✓" : "✗"}, Amount: ${finalCost != null ? "✓" : "✗"})',
         rawText: text,
       );
     }
 
     // If we have at least one field and high subscription relevance, allow partial extraction
-    if (serviceName == null || convertedCost == null) {
+    if (serviceName == null || finalCost == null) {
       // Try to infer missing fields
       if (serviceName == null) {
         // Try to extract any company/service name from context
         final inferredName = _inferServiceNameFromContext(text, lines);
-        if (inferredName != null && convertedCost != null) {
+        if (inferredName != null && finalCost != null) {
           return ReceiptExtractionResult(
             success: true,
             serviceName: inferredName,
-            cost: convertedCost,
+            cost: finalCost,
             currencyCode: finalCurrency,
             originalCost: originalCost,
             originalCurrency: originalCurrency,
@@ -438,7 +430,7 @@ class ReceiptOcrService {
     return ReceiptExtractionResult(
       success: true,
       serviceName: serviceName ?? 'Unknown Service',
-      cost: convertedCost ?? 0.0,
+      cost: finalCost ?? 0.0,
       currencyCode: finalCurrency,
       originalCost: originalCost,
       originalCurrency: originalCurrency,
@@ -1415,13 +1407,20 @@ class ReceiptExtractionResult {
       return null;
     }
 
+    // Use original currency and cost if available, otherwise use extracted values
+    // This ensures we save the native currency and value, not converted values
+    final finalCurrency = originalCurrency?.isNotEmpty == true
+        ? originalCurrency!
+        : (currencyCode ?? 'USD');
+    final finalCost = originalCost ?? cost!;
+
     return Subscription(
       id: DateTime.now().microsecondsSinceEpoch.toString(),
       serviceName: serviceName!,
       billingCycle: billingCycle ?? BillingCycle.monthly,
       renewalDate: renewalDate!,
-      currencyCode: currencyCode ?? 'USD',
-      cost: cost!,
+      currencyCode: finalCurrency,
+      cost: finalCost,
       autoRenew: true,
       category: category ?? SubscriptionCategory.other,
       paymentMethod: paymentMethod ?? 'Unknown',

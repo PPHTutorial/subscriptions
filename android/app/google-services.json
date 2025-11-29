@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "494775919926-5m8nu15ub6rlp3bj48chu8kht1igkor0.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.codeink.stsl.subscriptions",
+            "certificate_hash": "03f9446a9f3f3bcf8301e7d3b3c039cea272e60a"
+          }
+        },
+        {
           "client_id": "494775919926-re44frj5k32hurtqfetv6baa1f1ktlpa.apps.googleusercontent.com",
           "client_type": 3
         }

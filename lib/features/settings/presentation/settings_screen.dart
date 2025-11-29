@@ -9,6 +9,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:subscriptions/core/ads/banner_ad_widget.dart';
+import 'package:subscriptions/core/ads/native_ad_widget.dart';
 import 'package:subscriptions/core/currency/currency_list.dart';
 import 'package:subscriptions/core/currency/currency_preferences_provider.dart';
 import 'package:subscriptions/core/notifications/notification_service.dart';
@@ -18,7 +19,13 @@ import 'package:subscriptions/features/legal/presentation/privacy_policy_screen.
 import 'package:subscriptions/features/legal/presentation/terms_of_service_screen.dart';
 
 import '../../../core/theme/theme_provider.dart';
+import '../../../core/premium/premium_screen.dart';
+import '../../../core/premium/premium_provider.dart';
+import '../../../core/premium/premium_restrictions.dart';
+import '../../../core/export/export_service.dart';
 import '../../advanced/presentation/advanced_features_section.dart';
+import '../../subscriptions/application/subscription_controller.dart';
+import '../../subscriptions/domain/subscription.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -125,15 +132,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           const SizedBox(height: 24),
           const BannerAdWidget(),
           const SizedBox(height: 24),
-          _SectionTitle(title: 'Currency'),
+          const _SectionTitle(title: 'Currency'),
           const CurrencySettingsSection(),
           const SizedBox(height: 24),
-          _SectionTitle(title: 'Notifications'),
+          const PremiumSection(),
+          const SizedBox(height: 24),
+          const ExportDataSection(),
+          const SizedBox(height: 24),
+          const _SectionTitle(title: 'Notifications'),
           const NotificationSettingsSection(),
           const SizedBox(height: 24),
+          const NativeAdWidget(),
+          const SizedBox(height: 12),
           const AdvancedFeaturesSection(),
           const SizedBox(height: 24),
-          _SectionTitle(title: 'About'),
+          const _SectionTitle(title: 'About'),
           Card(
             // margin: EdgeInsets.all(ResponsiveHelper.spacing(8)),
             child: Padding(
@@ -194,6 +207,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ),
             ),
           ),
+          const SizedBox(height: 24),
+          const NativeAdWidget(),
           const SizedBox(height: 24),
           const BannerAdWidget(),
         ],
@@ -494,6 +509,238 @@ class _NotificationSettingsSectionState
   }
 }
 
+/// Premium section in settings
+class PremiumSection extends ConsumerWidget {
+  const PremiumSection({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isPremium = ref.watch(premiumStatusProvider).maybeWhen(
+          data: (premium) => premium,
+          orElse: () => false,
+        );
+
+    return Card(
+      child: Padding(
+        padding: EdgeInsets.all(ResponsiveHelper.spacing(16)),
+        child: Column(
+          children: [
+            ListTile(
+              leading: Icon(
+                isPremium ? Icons.star_rounded : Icons.star_outline_rounded,
+                color: isPremium
+                    ? Theme.of(context).colorScheme.primary
+                    : Theme.of(context).colorScheme.onSurface,
+              ),
+              title: Text(isPremium ? 'Premium Active' : 'Upgrade to Premium'),
+              subtitle: Text(
+                isPremium
+                    ? 'You have access to all premium features'
+                    : 'Unlock unlimited subscriptions and remove ads',
+              ),
+              trailing: Icon(
+                Icons.chevron_right_rounded,
+                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.3),
+              ),
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => const PremiumScreen(),
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Export data section in settings
+class ExportDataSection extends ConsumerWidget {
+  const ExportDataSection({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final exportService = ExportService();
+
+    return Card(
+      child: Padding(
+        padding: EdgeInsets.all(ResponsiveHelper.spacing(16)),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Export Data',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+            ),
+            SizedBox(height: ResponsiveHelper.spacing(8)),
+            Text(
+              'Export your subscriptions to CSV or PDF',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withOpacity(0.7),
+                  ),
+            ),
+            SizedBox(height: ResponsiveHelper.spacing(16)),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () =>
+                        _exportData(context, ref, exportService, 'csv'),
+                    icon: const Icon(Icons.table_chart_rounded),
+                    label: const Text('Export CSV'),
+                  ),
+                ),
+                SizedBox(width: ResponsiveHelper.spacing(12)),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () =>
+                        _exportData(context, ref, exportService, 'pdf'),
+                    icon: const Icon(Icons.picture_as_pdf_rounded),
+                    label: const Text('Export PDF'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _exportData(
+    BuildContext context,
+    WidgetRef ref,
+    ExportService exportService,
+    String format,
+  ) async {
+    // Check premium restriction
+    final isRestricted = await PremiumRestrictions.isRestricted(
+      ref,
+      RestrictionType.exportData,
+    );
+
+    if (isRestricted) {
+      if (context.mounted) {
+        await _showPremiumRequiredDialog(context);
+      }
+      return;
+    }
+
+    // Get subscriptions
+    final subscriptionsAsync = ref.read(subscriptionControllerProvider);
+    final subscriptions = subscriptionsAsync.maybeWhen(
+      data: (subs) => subs,
+      orElse: () => <Subscription>[],
+    );
+
+    if (subscriptions.isEmpty) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No subscriptions to export'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+      return;
+    }
+
+    // Show loading
+    if (context.mounted) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    try {
+      File file;
+      if (format == 'csv') {
+        file = await exportService.exportToCsv(subscriptions);
+      } else {
+        file = await exportService.exportToPdf(subscriptions);
+      }
+
+      // Close loading dialog
+      if (context.mounted) {
+        Navigator.of(context).pop();
+      }
+
+      // Share the file
+      await exportService.shareFile(file);
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Subscriptions exported to ${format.toUpperCase()}'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      // Close loading dialog
+      if (context.mounted) {
+        Navigator.of(context).pop();
+      }
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Export failed: $e'),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _showPremiumRequiredDialog(BuildContext context) async {
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.star_outline_rounded),
+            SizedBox(width: 12),
+            Expanded(child: Text('Premium Feature')),
+          ],
+        ),
+        content: const Text(
+          'Data export is available for Premium users only. Upgrade to export your subscriptions to CSV or PDF.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => const PremiumScreen(),
+                ),
+              );
+            },
+            child: const Text('Upgrade to Premium'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class CurrencySettingsSection extends ConsumerStatefulWidget {
   const CurrencySettingsSection({super.key});
 
@@ -505,6 +752,8 @@ class CurrencySettingsSection extends ConsumerStatefulWidget {
 class _CurrencySettingsSectionState
     extends ConsumerState<CurrencySettingsSection> {
   String _searchQuery = '';
+  bool _showInverseRate =
+      false; // Toggle between "1 USD = X base" and "1 base = X USD"
 
   @override
   Widget build(BuildContext context) {
@@ -654,6 +903,9 @@ class _CurrencySettingsSectionState
                     snapshot.data != null &&
                     baseCurrency != 'USD') {
                   final rate = snapshot.data!;
+                  // Calculate inverse rate: 1 baseCurrency = 1/rate USD
+                  final inverseRate = 1.0 / rate;
+
                   return Container(
                     padding: EdgeInsets.all(ResponsiveHelper.spacing(12)),
                     decoration: BoxDecoration(
@@ -673,9 +925,27 @@ class _CurrencySettingsSectionState
                         SizedBox(width: ResponsiveHelper.spacing(8)),
                         Expanded(
                           child: Text(
-                            '1 USD = ${rate.toStringAsFixed(4)} $baseCurrency',
+                            _showInverseRate
+                                ? '1 $baseCurrency = ${inverseRate.toStringAsFixed(4)} USD'
+                                : '1 USD = ${rate.toStringAsFixed(4)} $baseCurrency',
                             style: Theme.of(context).textTheme.bodySmall,
                           ),
+                        ),
+                        SizedBox(width: ResponsiveHelper.spacing(8)),
+                        IconButton(
+                          icon: Icon(
+                            Icons.swap_horiz_rounded,
+                            size: 20,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                          tooltip: 'Toggle exchange rate direction',
+                          onPressed: () {
+                            setState(() {
+                              _showInverseRate = !_showInverseRate;
+                            });
+                          },
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
                         ),
                       ],
                     ),

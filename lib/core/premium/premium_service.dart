@@ -5,8 +5,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 enum PremiumTier {
   monthly('monthly', 'Monthly'),
   quarterly('quarterly', 'Quarterly'),
-  yearly('yearly', 'Yearly'),
-  lifetime('lifetime', 'Lifetime');
+  half_yearly('half_yearly', 'Half Yearly'),
+  yearly('yearly', 'Yearly');
 
   const PremiumTier(this.id, this.displayName);
   final String id;
@@ -26,7 +26,7 @@ class PremiumService {
     PremiumTier.monthly: 'premium_monthly',
     PremiumTier.quarterly: 'premium_quarterly',
     PremiumTier.yearly: 'premium_yearly',
-    PremiumTier.lifetime: 'premium_lifetime',
+    PremiumTier.half_yearly: 'premium_half_yearly',
   };
 
   /// Check if user has premium access
@@ -38,7 +38,7 @@ class PremiumService {
 
     // Check if lifetime (no expiry)
     final tier = prefs.getString(_premiumTierKey);
-    if (tier == PremiumTier.lifetime.id) return true;
+    if (tier == PremiumTier.half_yearly.id) return true;
 
     // Check expiry for subscription tiers
     final expiryStr = prefs.getString(_premiumExpiryKey);
@@ -77,7 +77,7 @@ class PremiumService {
 
     if (expiry != null) {
       await prefs.setString(_premiumExpiryKey, expiry.toIso8601String());
-    } else if (tier == PremiumTier.lifetime) {
+    } else if (tier == PremiumTier.half_yearly) {
       // Lifetime has no expiry
       await prefs.remove(_premiumExpiryKey);
     }

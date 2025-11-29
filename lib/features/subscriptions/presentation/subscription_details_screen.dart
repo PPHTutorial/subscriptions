@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../core/ads/banner_ad_widget.dart';
+import '../../../../core/currency/currency_conversion_service.dart';
+import '../../../../core/currency/currency_preferences_provider.dart';
 import '../../../../core/responsive/responsive_helper.dart';
 import '../application/subscription_controller.dart';
 import '../domain/subscription.dart';
@@ -102,11 +104,50 @@ class SubscriptionDetailsScreen extends ConsumerWidget {
                     SizedBox(height: ResponsiveHelper.spacing(24)),
                     Divider(height: 1),
                     SizedBox(height: ResponsiveHelper.spacing(24)),
-                    _DetailRow(
-                      icon: Icons.attach_money_rounded,
-                      label: 'Cost',
-                      value:
-                          '${currentSubscription.currencyCode} ${currentSubscription.cost.toStringAsFixed(2)}',
+                    FutureBuilder<double>(
+                      future: _getConvertedCost(currentSubscription, ref),
+                      builder: (context, snapshot) {
+                        final currencyService =
+                            ref.read(currencyConversionServiceProvider);
+                        final convertedCost = snapshot.data;
+
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _DetailRow(
+                              icon: Icons.attach_money_rounded,
+                              label: 'Cost',
+                              value: convertedCost != null
+                                  ? currencyService.formatCurrency(
+                                      amount: convertedCost,
+                                      currencyCode:
+                                          currencyService.baseCurrency,
+                                    )
+                                  : '${currentSubscription.currencyCode} ${currentSubscription.cost.toStringAsFixed(2)}',
+                            ),
+                            // Always show original currency and amount in faint color
+                            Padding(
+                              padding: EdgeInsets.only(
+                                left: ResponsiveHelper.spacing(
+                                    44), // Align with detail row content
+                                top: ResponsiveHelper.spacing(4),
+                              ),
+                              child: Text(
+                                '${currentSubscription.currencyCode} ${currentSubscription.cost.toStringAsFixed(2)}',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodySmall
+                                    ?.copyWith(
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurface
+                                          .withOpacity(0.4),
+                                    ),
+                              ),
+                            ),
+                          ],
+                        );
+                      },
                     ),
                     SizedBox(height: ResponsiveHelper.spacing(16)),
                     _DetailRow(
@@ -219,6 +260,15 @@ class SubscriptionDetailsScreen extends ConsumerWidget {
           ],
         ),
       ),
+    );
+  }
+
+  Future<double> _getConvertedCost(
+      Subscription subscription, WidgetRef ref) async {
+    final currencyService = ref.read(currencyConversionServiceProvider);
+    return await currencyService.convertToBase(
+      amount: subscription.cost,
+      fromCurrency: subscription.currencyCode,
     );
   }
 

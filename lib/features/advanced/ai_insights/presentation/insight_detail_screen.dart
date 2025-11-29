@@ -1,6 +1,10 @@
+// ignore_for_file: prefer_const_constructors, deprecated_member_use
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/ads/banner_ad_widget.dart';
 import '../../../../core/currency/currency_conversion_service.dart';
+import '../../../../core/currency/currency_preferences_provider.dart';
 import '../../../../core/responsive/responsive_helper.dart';
 import '../../../subscriptions/domain/subscription.dart';
 import '../data/ai_insights_service.dart';
@@ -57,8 +61,8 @@ class InsightDetailScreen extends ConsumerWidget {
 }
 
 /// Waste Detail Screen - Shows inactive subscriptions
-class _WasteDetailScreen extends StatelessWidget {
-  _WasteDetailScreen({
+class _WasteDetailScreen extends ConsumerWidget {
+  const _WasteDetailScreen({
     required this.subscriptions,
     required this.allSubscriptions,
   });
@@ -66,233 +70,125 @@ class _WasteDetailScreen extends StatelessWidget {
   final List<Subscription> subscriptions;
   final List<Subscription> allSubscriptions;
 
-  final CurrencyConversionService _currencyService =
-      CurrencyConversionService();
-
   @override
-  Widget build(BuildContext context) {
-    // Note: Currency conversion should be done, but since this is a StatelessWidget,
-    // we'll calculate it synchronously. The actual conversion happens in the AI insights service.
-    // For display, we'll use the normalized amounts and format with base currency.
-    final totalWaste = subscriptions.fold<double>(
-      0,
-      (sum, s) => sum + _normalizeToMonthly(s.cost, s.billingCycle),
-    );
+  Widget build(BuildContext context, WidgetRef ref) {
+    final currencyService = ref.watch(currencyConversionServiceProvider);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Inactive Subscriptions'),
-      ),
-      body: ListView(
-        padding: EdgeInsets.all(ResponsiveHelper.spacing(20)),
-        children: [
-          // Summary card
-          Card(
-            color: Theme.of(context).colorScheme.tertiaryContainer,
-            child: Padding(
-              padding: EdgeInsets.all(ResponsiveHelper.spacing(20)),
-              child: Column(
-                children: [
-                  Icon(
-                    Icons.warning_rounded,
-                    size: 48,
-                    color: Theme.of(context).colorScheme.onTertiaryContainer,
-                  ),
-                  SizedBox(height: ResponsiveHelper.spacing(12)),
-                  Text(
-                    '${subscriptions.length} Inactive Subscription${subscriptions.length > 1 ? 's' : ''}',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color:
-                              Theme.of(context).colorScheme.onTertiaryContainer,
-                        ),
-                  ),
-                  SizedBox(height: ResponsiveHelper.spacing(8)),
-                  Text(
-                    'Potential Monthly Savings',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Theme.of(context)
-                              .colorScheme
-                              .onTertiaryContainer
-                              .withOpacity(0.8),
-                        ),
-                  ),
-                  SizedBox(height: ResponsiveHelper.spacing(4)),
-                  Text(
-                    _formatCurrency(totalWaste),
-                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color:
-                              Theme.of(context).colorScheme.onTertiaryContainer,
-                        ),
-                  ),
-                  SizedBox(height: ResponsiveHelper.spacing(8)),
-                  Text(
-                    'Yearly: ${_formatCurrency(totalWaste * 12)}',
-                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          color: Theme.of(context)
-                              .colorScheme
-                              .onTertiaryContainer
-                              .withOpacity(0.9),
-                        ),
-                  ),
-                ],
-              ),
-            ),
+    return FutureBuilder<double>(
+      future: _getConvertedTotalWaste(subscriptions, currencyService),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return Scaffold(
+            appBar: AppBar(title: Text('Inactive Subscriptions')),
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+        final totalWaste = snapshot.data!;
+
+        return Scaffold(
+          appBar: AppBar(
+            title: const Text('Inactive Subscriptions'),
           ),
-          SizedBox(height: ResponsiveHelper.spacing(20)),
-          Text(
-            'Inactive Subscriptions',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-          ),
-          SizedBox(height: ResponsiveHelper.spacing(16)),
-          ...subscriptions
-              .map((sub) => _WasteSubscriptionCard(subscription: sub)),
-        ],
-      ),
-    );
-  }
-
-  double _normalizeToMonthly(double cost, BillingCycle cycle) {
-    switch (cycle) {
-      case BillingCycle.weekly:
-        return cost * 4.3;
-      case BillingCycle.monthly:
-        return cost;
-      case BillingCycle.quarterly:
-        return cost / 3;
-      case BillingCycle.yearly:
-        return cost / 12;
-      case BillingCycle.custom:
-        return cost;
-    }
-  }
-
-  String _formatCurrency(double amount) {
-    return _currencyService.formatCurrency(
-      amount: amount,
-      currencyCode: _currencyService.baseCurrency,
-    );
-  }
-}
-
-class _WasteSubscriptionCard extends StatelessWidget {
-  _WasteSubscriptionCard({required this.subscription});
-
-  final Subscription subscription;
-
-  final CurrencyConversionService _currencyService =
-      CurrencyConversionService();
-
-  @override
-  Widget build(BuildContext context) {
-    final daysSinceRenewal =
-        DateTime.now().difference(subscription.renewalDate).inDays;
-    final monthlyCost =
-        _normalizeToMonthly(subscription.cost, subscription.billingCycle);
-
-    return Card(
-      margin: EdgeInsets.only(bottom: ResponsiveHelper.spacing(12)),
-      child: Padding(
-        padding: EdgeInsets.all(ResponsiveHelper.spacing(16)),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
+          body: ListView(
+            padding: EdgeInsets.all(ResponsiveHelper.spacing(20)),
+            children: [
+              // Summary card
+              Card(
+                color: Theme.of(context).colorScheme.tertiaryContainer,
+                child: Padding(
+                  padding: EdgeInsets.all(ResponsiveHelper.spacing(20)),
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      Icon(
+                        Icons.warning_rounded,
+                        size: 48,
+                        color:
+                            Theme.of(context).colorScheme.onTertiaryContainer,
+                      ),
+                      SizedBox(height: ResponsiveHelper.spacing(12)),
                       Text(
-                        subscription.serviceName,
+                        '${subscriptions.length} Inactive Subscription${subscriptions.length > 1 ? 's' : ''}',
                         style: Theme.of(context).textTheme.titleLarge?.copyWith(
                               fontWeight: FontWeight.bold,
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onTertiaryContainer,
+                            ),
+                      ),
+                      SizedBox(height: ResponsiveHelper.spacing(8)),
+                      Text(
+                        'Potential Monthly Savings',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onTertiaryContainer
+                                  .withOpacity(0.8),
                             ),
                       ),
                       SizedBox(height: ResponsiveHelper.spacing(4)),
                       Text(
-                        '${_formatCurrency(monthlyCost)}/month',
+                        currencyService.formatCurrency(
+                            amount: totalWaste,
+                            currencyCode: currencyService.baseCurrency),
+                        style: Theme.of(context)
+                            .textTheme
+                            .headlineMedium
+                            ?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onTertiaryContainer,
+                            ),
+                      ),
+                      SizedBox(height: ResponsiveHelper.spacing(8)),
+                      Text(
+                        'Yearly: ${currencyService.formatCurrency(amount: totalWaste * 12, currencyCode: currencyService.baseCurrency)}',
                         style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                              color: Theme.of(context).colorScheme.primary,
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onTertiaryContainer
+                                  .withOpacity(0.9),
                             ),
                       ),
                     ],
                   ),
                 ),
-                Container(
-                  padding: EdgeInsets.symmetric(
-                    horizontal: ResponsiveHelper.spacing(12),
-                    vertical: ResponsiveHelper.spacing(6),
-                  ),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.errorContainer,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    '$daysSinceRenewal days overdue',
-                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                          color: Theme.of(context).colorScheme.onErrorContainer,
-                          fontWeight: FontWeight.bold,
-                        ),
-                  ),
-                ),
-              ],
-            ),
-            SizedBox(height: ResponsiveHelper.spacing(12)),
-            Row(
-              children: [
-                Icon(
-                  Icons.calendar_today_rounded,
-                  size: 16,
-                  color:
-                      Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
-                ),
-                SizedBox(width: ResponsiveHelper.spacing(8)),
-                Text(
-                  'Last renewal: ${_formatDate(subscription.renewalDate)}',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context)
-                            .colorScheme
-                            .onSurface
-                            .withOpacity(0.6),
-                      ),
-                ),
-              ],
-            ),
-            SizedBox(height: ResponsiveHelper.spacing(8)),
-            Container(
-              padding: EdgeInsets.all(ResponsiveHelper.spacing(12)),
-              decoration: BoxDecoration(
-                color: Theme.of(context)
-                    .colorScheme
-                    .surfaceVariant
-                    .withOpacity(0.3),
-                borderRadius: BorderRadius.circular(8),
               ),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.info_outline_rounded,
-                    size: 18,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                  SizedBox(width: ResponsiveHelper.spacing(8)),
-                  Expanded(
-                    child: Text(
-                      'This subscription appears to be inactive. Consider canceling to save ${_formatCurrency(monthlyCost)} per month.',
-                      style: Theme.of(context).textTheme.bodyMedium,
+              SizedBox(height: ResponsiveHelper.spacing(20)),
+              Text(
+                'Inactive Subscriptions',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
                     ),
-                  ),
-                ],
               ),
-            ),
-          ],
-        ),
-      ),
+              SizedBox(height: ResponsiveHelper.spacing(16)),
+              ...subscriptions.map((sub) => _WasteSubscriptionCard(
+                    subscription: sub,
+                    currencyService: currencyService,
+                  )),
+              SizedBox(height: ResponsiveHelper.spacing(20)),
+              const BannerAdWidget(),
+            ],
+          ),
+        );
+      },
     );
+  }
+
+  Future<double> _getConvertedTotalWaste(
+    List<Subscription> subscriptions,
+    CurrencyConversionService currencyService,
+  ) async {
+    double total = 0.0;
+    for (final sub in subscriptions) {
+      final normalized = _normalizeToMonthly(sub.cost, sub.billingCycle);
+      final converted = await currencyService.convertToBase(
+        amount: normalized,
+        fromCurrency: sub.currencyCode,
+      );
+      total += converted;
+    }
+    return total;
   }
 
   double _normalizeToMonthly(double cost, BillingCycle cycle) {
@@ -309,12 +205,168 @@ class _WasteSubscriptionCard extends StatelessWidget {
         return cost;
     }
   }
+}
 
-  String _formatCurrency(double amount) {
-    return _currencyService.formatCurrency(
-      amount: amount,
-      currencyCode: _currencyService.baseCurrency,
+class _WasteSubscriptionCard extends StatelessWidget {
+  const _WasteSubscriptionCard({
+    required this.subscription,
+    required this.currencyService,
+  });
+
+  final Subscription subscription;
+  final CurrencyConversionService currencyService;
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<double>(
+        future: _getConvertedMonthlyCost(subscription, currencyService),
+        builder: (context, snapshot) {
+          final monthlyCost = snapshot.data ?? 0.0;
+          final daysSinceRenewal =
+              DateTime.now().difference(subscription.renewalDate).inDays;
+
+          return Card(
+            margin: EdgeInsets.only(bottom: ResponsiveHelper.spacing(12)),
+            child: Padding(
+              padding: EdgeInsets.all(ResponsiveHelper.spacing(16)),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              subscription.serviceName,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleLarge
+                                  ?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                            ),
+                            SizedBox(height: ResponsiveHelper.spacing(4)),
+                            Text(
+                              '${currencyService.formatCurrency(amount: monthlyCost, currencyCode: currencyService.baseCurrency)}/month',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodyLarge
+                                  ?.copyWith(
+                                    color:
+                                        Theme.of(context).colorScheme.primary,
+                                  ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: ResponsiveHelper.spacing(12),
+                          vertical: ResponsiveHelper.spacing(6),
+                        ),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.errorContainer,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          '$daysSinceRenewal days overdue',
+                          style:
+                              Theme.of(context).textTheme.labelMedium?.copyWith(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onErrorContainer,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: ResponsiveHelper.spacing(12)),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.calendar_today_rounded,
+                        size: 16,
+                        color: Theme.of(context)
+                            .colorScheme
+                            .onSurface
+                            .withOpacity(0.6),
+                      ),
+                      SizedBox(width: ResponsiveHelper.spacing(8)),
+                      Text(
+                        'Last renewal: ${_formatDate(subscription.renewalDate)}',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurface
+                                  .withOpacity(0.6),
+                            ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: ResponsiveHelper.spacing(8)),
+                  Container(
+                    padding: EdgeInsets.all(ResponsiveHelper.spacing(12)),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context)
+                          .colorScheme
+                          .surfaceVariant
+                          .withOpacity(0.3),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.info_outline_rounded,
+                          size: 18,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
+                        SizedBox(width: ResponsiveHelper.spacing(8)),
+                        Expanded(
+                          child: Text(
+                            'This subscription appears to be inactive. Consider canceling to save ${currencyService.formatCurrency(amount: monthlyCost, currencyCode: currencyService.baseCurrency)} per month.',
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        });
+  }
+
+  Future<double> _getConvertedMonthlyCost(
+    Subscription subscription,
+    CurrencyConversionService currencyService,
+  ) async {
+    final normalized = _normalizeToMonthly(
+      subscription.cost,
+      subscription.billingCycle,
     );
+    return await currencyService.convertToBase(
+      amount: normalized,
+      fromCurrency: subscription.currencyCode,
+    );
+  }
+
+  double _normalizeToMonthly(double cost, BillingCycle cycle) {
+    switch (cycle) {
+      case BillingCycle.weekly:
+        return cost * 4.3;
+      case BillingCycle.monthly:
+        return cost;
+      case BillingCycle.quarterly:
+        return cost / 3;
+      case BillingCycle.yearly:
+        return cost / 12;
+      case BillingCycle.custom:
+        return cost;
+    }
   }
 
   String _formatDate(DateTime date) {
@@ -323,8 +375,8 @@ class _WasteSubscriptionCard extends StatelessWidget {
 }
 
 /// Overlap Detail Screen - Shows overlapping services
-class _OverlapDetailScreen extends StatelessWidget {
-  _OverlapDetailScreen({
+class _OverlapDetailScreen extends ConsumerWidget {
+  const _OverlapDetailScreen({
     required this.subscriptions,
     required this.allSubscriptions,
   });
@@ -332,120 +384,161 @@ class _OverlapDetailScreen extends StatelessWidget {
   final List<Subscription> subscriptions;
   final List<Subscription> allSubscriptions;
 
-  final CurrencyConversionService _currencyService =
-      CurrencyConversionService();
-
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final currencyService = ref.watch(currencyConversionServiceProvider);
     final groupName = _getGroupName(subscriptions.first.serviceName);
-    final totalCost = subscriptions.fold<double>(
-      0,
-      (sum, s) => sum + _normalizeToMonthly(s.cost, s.billingCycle),
-    );
-    final potentialSavings =
-        totalCost * ((subscriptions.length - 1) / subscriptions.length);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('Overlapping $groupName Services'),
-      ),
-      body: ListView(
-        padding: EdgeInsets.all(ResponsiveHelper.spacing(20)),
-        children: [
-          // Summary card
-          Card(
-            color: Theme.of(context).colorScheme.primaryContainer,
-            child: Padding(
-              padding: EdgeInsets.all(ResponsiveHelper.spacing(20)),
-              child: Column(
-                children: [
-                  Icon(
-                    Icons.layers_rounded,
-                    size: 48,
-                    color: Theme.of(context).colorScheme.onPrimaryContainer,
-                  ),
-                  SizedBox(height: ResponsiveHelper.spacing(12)),
-                  Text(
-                    '${subscriptions.length} Similar Services',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
+    return FutureBuilder<Map<String, double>>(
+      future: _getConvertedCosts(subscriptions, currencyService),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return Scaffold(
+            appBar: AppBar(title: Text('Overlapping Services')),
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+        final costs = snapshot.data!;
+        final totalCost = costs['total']!;
+        final potentialSavings =
+            totalCost * ((subscriptions.length - 1) / subscriptions.length);
+
+        return Scaffold(
+          appBar: AppBar(
+            title: Text('Overlapping $groupName Services'),
+          ),
+          body: ListView(
+            padding: EdgeInsets.all(ResponsiveHelper.spacing(20)),
+            children: [
+              // Summary card
+              Card(
+                color: Theme.of(context).colorScheme.primaryContainer,
+                child: Padding(
+                  padding: EdgeInsets.all(ResponsiveHelper.spacing(20)),
+                  child: Column(
+                    children: [
+                      Icon(
+                        Icons.layers_rounded,
+                        size: 48,
+                        color: Theme.of(context).colorScheme.onPrimaryContainer,
+                      ),
+                      SizedBox(height: ResponsiveHelper.spacing(12)),
+                      Text(
+                        '${subscriptions.length} Similar Services',
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onPrimaryContainer,
+                            ),
+                      ),
+                      SizedBox(height: ResponsiveHelper.spacing(8)),
+                      Text(
+                        'Total Monthly Cost',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onPrimaryContainer
+                                  .withOpacity(0.8),
+                            ),
+                      ),
+                      SizedBox(height: ResponsiveHelper.spacing(4)),
+                      Text(
+                        currencyService.formatCurrency(
+                            amount: totalCost,
+                            currencyCode: currencyService.baseCurrency),
+                        style: Theme.of(context)
+                            .textTheme
+                            .headlineMedium
+                            ?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onPrimaryContainer,
+                            ),
+                      ),
+                      SizedBox(height: ResponsiveHelper.spacing(16)),
+                      Container(
+                        padding: EdgeInsets.all(ResponsiveHelper.spacing(12)),
+                        decoration: BoxDecoration(
                           color:
-                              Theme.of(context).colorScheme.onPrimaryContainer,
+                              Theme.of(context).colorScheme.tertiaryContainer,
+                          borderRadius: BorderRadius.circular(8),
                         ),
-                  ),
-                  SizedBox(height: ResponsiveHelper.spacing(8)),
-                  Text(
-                    'Total Monthly Cost',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Theme.of(context)
-                              .colorScheme
-                              .onPrimaryContainer
-                              .withOpacity(0.8),
-                        ),
-                  ),
-                  SizedBox(height: ResponsiveHelper.spacing(4)),
-                  Text(
-                    _formatCurrency(totalCost),
-                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color:
-                              Theme.of(context).colorScheme.onPrimaryContainer,
-                        ),
-                  ),
-                  SizedBox(height: ResponsiveHelper.spacing(16)),
-                  Container(
-                    padding: EdgeInsets.all(ResponsiveHelper.spacing(12)),
-                    decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.tertiaryContainer,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.savings_rounded,
-                          color:
-                              Theme.of(context).colorScheme.onTertiaryContainer,
-                        ),
-                        SizedBox(width: ResponsiveHelper.spacing(8)),
-                        Text(
-                          'Potential Savings: ${_formatCurrency(potentialSavings)}/month',
-                          style:
-                              Theme.of(context).textTheme.titleMedium?.copyWith(
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.savings_rounded,
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onTertiaryContainer,
+                            ),
+                            SizedBox(width: ResponsiveHelper.spacing(8)),
+                            Text(
+                              'Potential Savings: ${currencyService.formatCurrency(amount: potentialSavings, currencyCode: currencyService.baseCurrency)}/month',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleMedium
+                                  ?.copyWith(
                                     fontWeight: FontWeight.bold,
                                     color: Theme.of(context)
                                         .colorScheme
                                         .onTertiaryContainer,
                                   ),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
-            ),
+              SizedBox(height: ResponsiveHelper.spacing(20)),
+              Text(
+                'Overlapping Services',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+              ),
+              SizedBox(height: ResponsiveHelper.spacing(8)),
+              Text(
+                'These services offer similar features. Consider consolidating to one service.',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Theme.of(context)
+                          .colorScheme
+                          .onSurface
+                          .withOpacity(0.7),
+                    ),
+              ),
+              SizedBox(height: ResponsiveHelper.spacing(16)),
+              ...subscriptions.map((sub) => _OverlapSubscriptionCard(
+                    subscription: sub,
+                    currencyService: currencyService,
+                  )),
+              SizedBox(height: ResponsiveHelper.spacing(20)),
+              const BannerAdWidget(),
+            ],
           ),
-          SizedBox(height: ResponsiveHelper.spacing(20)),
-          Text(
-            'Overlapping Services',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
-          ),
-          SizedBox(height: ResponsiveHelper.spacing(8)),
-          Text(
-            'These services offer similar features. Consider consolidating to one service.',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color:
-                      Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
-                ),
-          ),
-          SizedBox(height: ResponsiveHelper.spacing(16)),
-          ...subscriptions
-              .map((sub) => _OverlapSubscriptionCard(subscription: sub)),
-        ],
-      ),
+        );
+      },
     );
+  }
+
+  Future<Map<String, double>> _getConvertedCosts(
+    List<Subscription> subscriptions,
+    CurrencyConversionService currencyService,
+  ) async {
+    double total = 0.0;
+    for (final sub in subscriptions) {
+      final normalized = _normalizeToMonthly(sub.cost, sub.billingCycle);
+      final converted = await currencyService.convertToBase(
+        amount: normalized,
+        fromCurrency: sub.currencyCode,
+      );
+      total += converted;
+    }
+    return {'total': total};
   }
 
   String _getGroupName(String serviceName) {
@@ -473,52 +566,66 @@ class _OverlapDetailScreen extends StatelessWidget {
         return cost;
     }
   }
-
-  String _formatCurrency(double amount) {
-    return _currencyService.formatCurrency(
-      amount: amount,
-      currencyCode: _currencyService.baseCurrency,
-    );
-  }
 }
 
 class _OverlapSubscriptionCard extends StatelessWidget {
-  _OverlapSubscriptionCard({required this.subscription});
+  const _OverlapSubscriptionCard({
+    required this.subscription,
+    required this.currencyService,
+  });
 
   final Subscription subscription;
-
-  final CurrencyConversionService _currencyService =
-      CurrencyConversionService();
+  final CurrencyConversionService currencyService;
 
   @override
   Widget build(BuildContext context) {
-    final monthlyCost =
-        _normalizeToMonthly(subscription.cost, subscription.billingCycle);
+    return FutureBuilder<double>(
+      future: _getConvertedMonthlyCost(subscription, currencyService),
+      builder: (context, snapshot) {
+        final monthlyCost = snapshot.data ?? 0.0;
 
-    return Card(
-      margin: EdgeInsets.only(bottom: ResponsiveHelper.spacing(12)),
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-          child: Icon(
-            Icons.subscriptions_rounded,
-            color: Theme.of(context).colorScheme.onPrimaryContainer,
-          ),
-        ),
-        title: Text(
-          subscription.serviceName,
-          style: const TextStyle(fontWeight: FontWeight.bold),
-        ),
-        subtitle: Text(
-            '${subscription.category.displayName} • ${subscription.billingCycle.name}'),
-        trailing: Text(
-          _formatCurrency(monthlyCost),
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: Theme.of(context).colorScheme.primary,
+        return Card(
+          margin: EdgeInsets.only(bottom: ResponsiveHelper.spacing(12)),
+          child: ListTile(
+            leading: CircleAvatar(
+              backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+              child: Icon(
+                Icons.subscriptions_rounded,
+                color: Theme.of(context).colorScheme.onPrimaryContainer,
               ),
-        ),
-      ),
+            ),
+            title: Text(
+              subscription.serviceName,
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            subtitle: Text(
+                '${subscription.category.displayName} • ${subscription.billingCycle.name}'),
+            trailing: Text(
+              currencyService.formatCurrency(
+                  amount: monthlyCost,
+                  currencyCode: currencyService.baseCurrency),
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<double> _getConvertedMonthlyCost(
+    Subscription subscription,
+    CurrencyConversionService currencyService,
+  ) async {
+    final normalized = _normalizeToMonthly(
+      subscription.cost,
+      subscription.billingCycle,
+    );
+    return await currencyService.convertToBase(
+      amount: normalized,
+      fromCurrency: subscription.currencyCode,
     );
   }
 
@@ -535,13 +642,6 @@ class _OverlapSubscriptionCard extends StatelessWidget {
       case BillingCycle.custom:
         return cost;
     }
-  }
-
-  String _formatCurrency(double amount) {
-    return _currencyService.formatCurrency(
-      amount: amount,
-      currencyCode: _currencyService.baseCurrency,
-    );
   }
 }
 
@@ -601,7 +701,9 @@ class _BudgetDetailScreen extends StatelessWidget {
                   ),
                   SizedBox(height: ResponsiveHelper.spacing(4)),
                   Text(
-                    _formatCurrency(monthlySpend),
+                    _currencyService.formatCurrency(
+                        amount: monthlySpend,
+                        currencyCode: _currencyService.baseCurrency),
                     style: Theme.of(context).textTheme.headlineLarge?.copyWith(
                           fontWeight: FontWeight.bold,
                           color:
@@ -610,7 +712,7 @@ class _BudgetDetailScreen extends StatelessWidget {
                   ),
                   SizedBox(height: ResponsiveHelper.spacing(12)),
                   Text(
-                    'Yearly: ${_formatCurrency(yearlySpend)}',
+                    'Yearly: ${_currencyService.formatCurrency(amount: yearlySpend, currencyCode: _currencyService.baseCurrency)}',
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
                           color:
                               Theme.of(context).colorScheme.onPrimaryContainer,
@@ -633,11 +735,38 @@ class _BudgetDetailScreen extends StatelessWidget {
               category: entry.key,
               amount: entry.value,
               total: monthlySpend,
+              currencyService: _currencyService,
             ),
           ),
+          SizedBox(height: ResponsiveHelper.spacing(20)),
+          const BannerAdWidget(),
         ],
       ),
     );
+  }
+
+  Future<Map<String, dynamic>> _getConvertedBudget(
+    List<Subscription> allSubscriptions,
+    CurrencyConversionService currencyService,
+  ) async {
+    double monthlySpend = 0;
+    final categorySpending = <SubscriptionCategory, double>{};
+
+    for (final sub in allSubscriptions) {
+      final normalized = _normalizeToMonthly(sub.cost, sub.billingCycle);
+      final converted = await currencyService.convertToBase(
+        amount: normalized,
+        fromCurrency: sub.currencyCode,
+      );
+      monthlySpend += converted;
+      categorySpending[sub.category] =
+          (categorySpending[sub.category] ?? 0) + converted;
+    }
+
+    return {
+      'monthlySpend': monthlySpend,
+      'categorySpending': categorySpending,
+    };
   }
 
   double _normalizeToMonthly(double cost, BillingCycle cycle) {
@@ -654,28 +783,20 @@ class _BudgetDetailScreen extends StatelessWidget {
         return cost;
     }
   }
-
-  String _formatCurrency(double amount) {
-    return _currencyService.formatCurrency(
-      amount: amount,
-      currencyCode: _currencyService.baseCurrency,
-    );
-  }
 }
 
 class _CategorySpendingCard extends StatelessWidget {
-  _CategorySpendingCard({
+  const _CategorySpendingCard({
     required this.category,
     required this.amount,
     required this.total,
+    required this.currencyService,
   });
 
   final SubscriptionCategory category;
   final double amount;
   final double total;
-
-  final CurrencyConversionService _currencyService =
-      CurrencyConversionService();
+  final CurrencyConversionService currencyService;
 
   @override
   Widget build(BuildContext context) {
@@ -698,7 +819,9 @@ class _CategorySpendingCard extends StatelessWidget {
                       ),
                 ),
                 Text(
-                  _formatCurrency(amount),
+                  currencyService.formatCurrency(
+                      amount: amount,
+                      currencyCode: currencyService.baseCurrency),
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.bold,
                         color: Theme.of(context).colorScheme.primary,
@@ -728,18 +851,11 @@ class _CategorySpendingCard extends StatelessWidget {
       ),
     );
   }
-
-  String _formatCurrency(double amount) {
-    return _currencyService.formatCurrency(
-      amount: amount,
-      currencyCode: _currencyService.baseCurrency,
-    );
-  }
 }
 
 /// Usage Detail Screen - Shows expensive subscriptions
-class _UsageDetailScreen extends StatelessWidget {
-  _UsageDetailScreen({
+class _UsageDetailScreen extends ConsumerWidget {
+  const _UsageDetailScreen({
     required this.subscriptions,
     required this.allSubscriptions,
   });
@@ -748,67 +864,106 @@ class _UsageDetailScreen extends StatelessWidget {
   final List<Subscription> allSubscriptions;
 
   @override
-  Widget build(BuildContext context) {
-    final sortedSubs = subscriptions.toList()
-      ..sort((a, b) => _normalizeToMonthly(b.cost, b.billingCycle)
-          .compareTo(_normalizeToMonthly(a.cost, a.billingCycle)));
+  Widget build(BuildContext context, WidgetRef ref) {
+    final currencyService = ref.watch(currencyConversionServiceProvider);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('High-Value Subscriptions'),
-      ),
-      body: ListView(
-        padding: EdgeInsets.all(ResponsiveHelper.spacing(20)),
-        children: [
-          // Summary card
-          Card(
-            color: Theme.of(context).colorScheme.secondaryContainer,
-            child: Padding(
-              padding: EdgeInsets.all(ResponsiveHelper.spacing(20)),
-              child: Column(
-                children: [
-                  Icon(
-                    Icons.trending_up_rounded,
-                    size: 48,
-                    color: Theme.of(context).colorScheme.onSecondaryContainer,
-                  ),
-                  SizedBox(height: ResponsiveHelper.spacing(12)),
-                  Text(
-                    '${subscriptions.length} High-Value Subscription${subscriptions.length > 1 ? 's' : ''}',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: Theme.of(context)
-                              .colorScheme
-                              .onSecondaryContainer,
-                        ),
-                  ),
-                  SizedBox(height: ResponsiveHelper.spacing(8)),
-                  Text(
-                    'These subscriptions represent significant value. Ensure you\'re getting the most out of them.',
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Theme.of(context)
-                              .colorScheme
-                              .onSecondaryContainer
-                              .withOpacity(0.8),
-                        ),
-                  ),
-                ],
-              ),
-            ),
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: _getConvertedSubscriptions(subscriptions, currencyService),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return Scaffold(
+            appBar: AppBar(title: Text('High-Value Subscriptions')),
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+        final sortedSubs = snapshot.data!;
+
+        return Scaffold(
+          appBar: AppBar(
+            title: const Text('High-Value Subscriptions'),
           ),
-          SizedBox(height: ResponsiveHelper.spacing(20)),
-          Text(
-            'Subscriptions',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
+          body: ListView(
+            padding: EdgeInsets.all(ResponsiveHelper.spacing(20)),
+            children: [
+              // Summary card
+              Card(
+                color: Theme.of(context).colorScheme.secondaryContainer,
+                child: Padding(
+                  padding: EdgeInsets.all(ResponsiveHelper.spacing(20)),
+                  child: Column(
+                    children: [
+                      Icon(
+                        Icons.trending_up_rounded,
+                        size: 48,
+                        color:
+                            Theme.of(context).colorScheme.onSecondaryContainer,
+                      ),
+                      SizedBox(height: ResponsiveHelper.spacing(12)),
+                      Text(
+                        '${subscriptions.length} High-Value Subscription${subscriptions.length > 1 ? 's' : ''}',
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSecondaryContainer,
+                            ),
+                      ),
+                      SizedBox(height: ResponsiveHelper.spacing(8)),
+                      Text(
+                        'These subscriptions represent significant value. Ensure you\'re getting the most out of them.',
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSecondaryContainer
+                                  .withOpacity(0.8),
+                            ),
+                      ),
+                    ],
+                  ),
                 ),
+              ),
+              SizedBox(height: ResponsiveHelper.spacing(20)),
+              Text(
+                'Subscriptions',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+              ),
+              SizedBox(height: ResponsiveHelper.spacing(16)),
+              ...sortedSubs.map((sub) => _UsageSubscriptionCard(
+                    subscription: sub['subscription'] as Subscription,
+                    monthlyCost: sub['monthlyCost'] as double,
+                    currencyService: currencyService,
+                  )),
+              SizedBox(height: ResponsiveHelper.spacing(20)),
+              const BannerAdWidget(),
+            ],
           ),
-          SizedBox(height: ResponsiveHelper.spacing(16)),
-          ...sortedSubs.map((sub) => _UsageSubscriptionCard(subscription: sub)),
-        ],
-      ),
+        );
+      },
     );
+  }
+
+  Future<List<Map<String, dynamic>>> _getConvertedSubscriptions(
+    List<Subscription> subscriptions,
+    CurrencyConversionService currencyService,
+  ) async {
+    final converted = <Map<String, dynamic>>[];
+    for (final sub in subscriptions) {
+      final normalized = _normalizeToMonthly(sub.cost, sub.billingCycle);
+      final convertedCost = await currencyService.convertToBase(
+        amount: normalized,
+        fromCurrency: sub.currencyCode,
+      );
+      converted.add({
+        'subscription': sub,
+        'monthlyCost': convertedCost,
+      });
+    }
+    converted.sort((a, b) =>
+        (b['monthlyCost'] as double).compareTo(a['monthlyCost'] as double));
+    return converted;
   }
 
   double _normalizeToMonthly(double cost, BillingCycle cycle) {
@@ -828,17 +983,18 @@ class _UsageDetailScreen extends StatelessWidget {
 }
 
 class _UsageSubscriptionCard extends StatelessWidget {
-  _UsageSubscriptionCard({required this.subscription});
+  const _UsageSubscriptionCard({
+    required this.subscription,
+    required this.monthlyCost,
+    required this.currencyService,
+  });
 
   final Subscription subscription;
-
-  final CurrencyConversionService _currencyService =
-      CurrencyConversionService();
+  final double monthlyCost;
+  final CurrencyConversionService currencyService;
 
   @override
   Widget build(BuildContext context) {
-    final monthlyCost =
-        _normalizeToMonthly(subscription.cost, subscription.billingCycle);
     final yearlyCost = monthlyCost * 12;
 
     return Card(
@@ -883,7 +1039,9 @@ class _UsageSubscriptionCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
-                    _formatCurrency(monthlyCost),
+                    currencyService.formatCurrency(
+                        amount: monthlyCost,
+                        currencyCode: currencyService.baseCurrency),
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.bold,
                           color:
@@ -908,7 +1066,9 @@ class _UsageSubscriptionCard extends StatelessWidget {
                   child: _InfoChip(
                     icon: Icons.account_balance_wallet_rounded,
                     label: 'Yearly',
-                    value: _formatCurrency(yearlyCost),
+                    value: currencyService.formatCurrency(
+                        amount: yearlyCost,
+                        currencyCode: currencyService.baseCurrency),
                   ),
                 ),
               ],
@@ -932,13 +1092,6 @@ class _UsageSubscriptionCard extends StatelessWidget {
       case BillingCycle.custom:
         return cost;
     }
-  }
-
-  String _formatCurrency(double amount) {
-    return _currencyService.formatCurrency(
-      amount: amount,
-      currencyCode: _currencyService.baseCurrency,
-    );
   }
 }
 

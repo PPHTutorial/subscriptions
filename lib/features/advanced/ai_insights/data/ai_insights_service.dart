@@ -52,6 +52,7 @@ class AiInsightsService {
     if (inactive.isNotEmpty) {
       // Convert all costs to base currency before summing
       double totalWaste = 0;
+      String fromCurrency = '';
       for (final sub in inactive) {
         final normalizedMonthly =
             _normalizeToMonthly(sub.cost, sub.billingCycle);
@@ -60,16 +61,20 @@ class AiInsightsService {
           fromCurrency: sub.currencyCode,
         );
         totalWaste += convertedCost;
+        fromCurrency = sub.currencyCode;
       }
 
-      final baseCurrency = _currencyService.baseCurrency;
+      final baseCurrency = await _currencyService.convertToBase(
+        amount: totalWaste,
+        fromCurrency: fromCurrency,
+      );
 
       return Insight(
         type: InsightType.waste,
         title: 'Potential Waste Detected',
         message:
             'You have ${inactive.length} subscription(s) that may be inactive. '
-            'This could save you ${_formatCurrency(totalWaste)} $baseCurrency per month.',
+            'This could save you ${_currencyService.formatCurrency(amount: totalWaste, currencyCode: fromCurrency)} per month.',
         severity: InsightSeverity.high,
         actionable: true,
         actionLabel: 'Review inactive subscriptions',
@@ -204,7 +209,10 @@ class AiInsightsService {
           amount: normalizedCost,
           fromCurrency: sub.currencyCode,
         );
-        final savingsAmount = convertedCost * bestAlternative.savings;
+        final savingsAmount = await _currencyService.convertToBase(
+          amount: convertedCost * bestAlternative.savings,
+          fromCurrency: sub.currencyCode,
+        );
         final baseCurrency = _currencyService.baseCurrency;
 
         insights.add(Insight(
@@ -251,12 +259,15 @@ class AiInsightsService {
     }
 
     if (expensive.isNotEmpty) {
-      final baseCurrency = _currencyService.baseCurrency;
+      final baseCurrency = await _currencyService.convertToBase(
+        amount: 20,
+        fromCurrency: 'USD',
+      );
       insights.add(Insight(
         type: InsightType.usage,
         title: 'Optimize High-Value Subscriptions',
         message:
-            'You have ${expensive.length} subscription(s) costing more than ${_formatCurrency(20)} $baseCurrency/month. '
+            'You have ${expensive.length} subscription(s) costing more than ${_formatCurrency(baseCurrency)}/month. '
             'Make sure you\'re getting value from these services.',
         severity: InsightSeverity.low,
         actionable: true,

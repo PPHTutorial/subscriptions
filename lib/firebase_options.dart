@@ -63,7 +63,9 @@ class DefaultFirebaseOptions {
     messagingSenderId: '494775919926',
     projectId: 'subswatcher-68164',
     storageBucket: 'subswatcher-68164.firebasestorage.app',
+    androidClientId: '494775919926-5m8nu15ub6rlp3bj48chu8kht1igkor0.apps.googleusercontent.com',
     iosClientId: '494775919926-1dpnj4bh3napmjnj91jqf5rq3r6q36g7.apps.googleusercontent.com',
     iosBundleId: 'com.codeink.stsl.subscriptions',
   );
+
 }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/ads/banner_ad_widget.dart';
 import '../../../../core/currency/currency_conversion_service.dart';
+import '../../../../core/currency/currency_preferences_provider.dart';
 import '../../../../core/responsive/responsive_helper.dart';
 import '../../../subscriptions/domain/subscription.dart';
 import '../data/insights_dataset.dart';
@@ -14,124 +15,148 @@ class AlternativesScreen extends ConsumerWidget {
 
   final Subscription subscription;
 
-  static final CurrencyConversionService _currencyService =
-      CurrencyConversionService();
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final currencyService = ref.watch(currencyConversionServiceProvider);
     final alternatives =
         InsightsDataset.getAlternativesForService(subscription.serviceName);
-    final monthlyCost =
-        _normalizeToMonthly(subscription.cost, subscription.billingCycle);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Alternative Services'),
-      ),
-      body: alternatives.isEmpty
-          ? Center(
-              child: Padding(
-                padding: EdgeInsets.all(ResponsiveHelper.spacing(32)),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
+    return FutureBuilder<double>(
+      future: _getConvertedMonthlyCost(subscription, currencyService),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+        final monthlyCost = snapshot.data!;
+
+        return Scaffold(
+          appBar: AppBar(
+            title: const Text('Alternative Services'),
+          ),
+          body: alternatives.isEmpty
+              ? Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(ResponsiveHelper.spacing(32)),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.search_off_rounded,
+                          size: 64,
+                          color: Theme.of(context)
+                              .colorScheme
+                              .onSurface
+                              .withOpacity(0.5),
+                        ),
+                        SizedBox(height: ResponsiveHelper.spacing(16)),
+                        Text(
+                          'No Alternatives Found',
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
+                        SizedBox(height: ResponsiveHelper.spacing(8)),
+                        Text(
+                          'We couldn\'t find any alternative services for ${subscription.serviceName}',
+                          textAlign: TextAlign.center,
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              : ListView(
+                  padding: EdgeInsets.all(ResponsiveHelper.spacing(20)),
                   children: [
-                    Icon(
-                      Icons.search_off_rounded,
-                      size: 64,
+                    // Current subscription card
+                    Card(
                       color: Theme.of(context)
                           .colorScheme
-                          .onSurface
-                          .withOpacity(0.5),
-                    ),
-                    SizedBox(height: ResponsiveHelper.spacing(16)),
-                    Text(
-                      'No Alternatives Found',
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                    SizedBox(height: ResponsiveHelper.spacing(8)),
-                    Text(
-                      'We couldn\'t find any alternative services for ${subscription.serviceName}',
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    ),
-                  ],
-                ),
-              ),
-            )
-          : ListView(
-              padding: EdgeInsets.all(ResponsiveHelper.spacing(20)),
-              children: [
-                // Current subscription card
-                Card(
-                  color: Theme.of(context)
-                      .colorScheme
-                      .surfaceVariant
-                      .withOpacity(0.3),
-                  child: Padding(
-                    padding: EdgeInsets.all(ResponsiveHelper.spacing(16)),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
+                          .surfaceVariant
+                          .withOpacity(0.3),
+                      child: Padding(
+                        padding: EdgeInsets.all(ResponsiveHelper.spacing(16)),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Icon(
-                              Icons.info_outline_rounded,
-                              color: Theme.of(context).colorScheme.primary,
+                            Row(
+                              children: [
+                                Icon(
+                                  Icons.info_outline_rounded,
+                                  color: Theme.of(context).colorScheme.primary,
+                                ),
+                                SizedBox(width: ResponsiveHelper.spacing(8)),
+                                Text(
+                                  'Current Subscription',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .titleMedium
+                                      ?.copyWith(
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                ),
+                              ],
                             ),
-                            SizedBox(width: ResponsiveHelper.spacing(8)),
+                            SizedBox(height: ResponsiveHelper.spacing(12)),
                             Text(
-                              'Current Subscription',
+                              subscription.serviceName,
+                              style: Theme.of(context).textTheme.titleLarge,
+                            ),
+                            SizedBox(height: ResponsiveHelper.spacing(4)),
+                            Text(
+                              '${currencyService.formatCurrency(amount: monthlyCost, currencyCode: currencyService.baseCurrency)}/month',
                               style: Theme.of(context)
                                   .textTheme
-                                  .titleMedium
+                                  .bodyLarge
                                   ?.copyWith(
+                                    color:
+                                        Theme.of(context).colorScheme.primary,
                                     fontWeight: FontWeight.bold,
                                   ),
                             ),
                           ],
                         ),
-                        SizedBox(height: ResponsiveHelper.spacing(12)),
-                        Text(
-                          subscription.serviceName,
-                          style: Theme.of(context).textTheme.titleLarge,
-                        ),
-                        SizedBox(height: ResponsiveHelper.spacing(4)),
-                        Text(
-                          '${_formatCurrency(monthlyCost)}/month',
-                          style: Theme.of(context)
-                              .textTheme
-                              .bodyLarge
-                              ?.copyWith(
-                                color: Theme.of(context).colorScheme.primary,
-                                fontWeight: FontWeight.bold,
-                              ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                SizedBox(height: ResponsiveHelper.spacing(20)),
-                Text(
-                  'Suggested Alternatives',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
                       ),
+                    ),
+                    SizedBox(height: ResponsiveHelper.spacing(20)),
+                    Text(
+                      'Suggested Alternatives',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                    ),
+                    SizedBox(height: ResponsiveHelper.spacing(16)),
+                    // Sort alternatives by savings (highest first)
+                    ...(alternatives.toList()
+                          ..sort((a, b) => b.savings.compareTo(a.savings)))
+                        .map(
+                      (alternative) => _AlternativeCard(
+                        alternative: alternative,
+                        currentMonthlyCost: monthlyCost,
+                        currentServiceName: subscription.serviceName,
+                        currencyService: currencyService,
+                      ),
+                    ),
+                    SizedBox(height: ResponsiveHelper.spacing(20)),
+                    const BannerAdWidget(),
+                  ],
                 ),
-                SizedBox(height: ResponsiveHelper.spacing(16)),
-                // Sort alternatives by savings (highest first)
-                ...(alternatives.toList()
-                      ..sort((a, b) => b.savings.compareTo(a.savings)))
-                    .map(
-                  (alternative) => _AlternativeCard(
-                    alternative: alternative,
-                    currentMonthlyCost: monthlyCost,
-                    currentServiceName: subscription.serviceName,
-                  ),
-                ),
-                SizedBox(height: ResponsiveHelper.spacing(20)),
-                const BannerAdWidget(),
-              ],
-            ),
+        );
+      },
+    );
+  }
+
+  Future<double> _getConvertedMonthlyCost(
+    Subscription subscription,
+    CurrencyConversionService currencyService,
+  ) async {
+    final normalizedCost = _normalizeToMonthly(
+      subscription.cost,
+      subscription.billingCycle,
+    );
+    return await currencyService.convertToBase(
+      amount: normalizedCost,
+      fromCurrency: subscription.currencyCode,
     );
   }
 
@@ -149,13 +174,6 @@ class AlternativesScreen extends ConsumerWidget {
         return cost;
     }
   }
-
-  String _formatCurrency(double amount) {
-    return _currencyService.formatCurrency(
-      amount: amount,
-      currencyCode: _currencyService.baseCurrency,
-    );
-  }
 }
 
 class _AlternativeCard extends StatelessWidget {
@@ -163,14 +181,13 @@ class _AlternativeCard extends StatelessWidget {
     required this.alternative,
     required this.currentMonthlyCost,
     required this.currentServiceName,
+    required this.currencyService,
   });
 
   final ServiceAlternative alternative;
   final double currentMonthlyCost;
   final String currentServiceName;
-
-  static final CurrencyConversionService _currencyService =
-      CurrencyConversionService();
+  final CurrencyConversionService currencyService;
 
   @override
   Widget build(BuildContext context) {
@@ -212,7 +229,7 @@ class _AlternativeCard extends StatelessWidget {
                       ),
                       SizedBox(height: ResponsiveHelper.spacing(4)),
                       Text(
-                        'Estimated: ${_formatCurrency(estimatedCost)}/month',
+                        'Estimated: ${currencyService.formatCurrency(amount: estimatedCost, currencyCode: currencyService.baseCurrency)}/month',
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                               color: Theme.of(context).colorScheme.primary,
                               fontWeight: FontWeight.w500,
@@ -299,7 +316,9 @@ class _AlternativeCard extends StatelessWidget {
                         ),
                         SizedBox(height: ResponsiveHelper.spacing(4)),
                         Text(
-                          _formatCurrency(savingsAmount),
+                          currencyService.formatCurrency(
+                              amount: savingsAmount,
+                              currencyCode: currencyService.baseCurrency),
                           style: Theme.of(context)
                               .textTheme
                               .titleMedium
@@ -338,7 +357,9 @@ class _AlternativeCard extends StatelessWidget {
                         ),
                         SizedBox(height: ResponsiveHelper.spacing(4)),
                         Text(
-                          _formatCurrency(savingsAmount * 12),
+                          currencyService.formatCurrency(
+                              amount: savingsAmount * 12,
+                              currencyCode: currencyService.baseCurrency),
                           style: Theme.of(context)
                               .textTheme
                               .titleMedium
@@ -356,13 +377,6 @@ class _AlternativeCard extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-
-  String _formatCurrency(double amount) {
-    return _currencyService.formatCurrency(
-      amount: amount,
-      currencyCode: _currencyService.baseCurrency,
     );
   }
 }

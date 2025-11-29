@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -236,42 +237,108 @@ class _CloudSyncScreenState extends ConsumerState<CloudSyncScreen> {
   }
 
   Future<void> _signInWithGoogle() async {
-    if (_syncService == null) return;
-
-    setState(() => _isSyncing = true);
-    try {
-      final success = await _syncService!.signInWithGoogle();
-      setState(() {
-        _isSignedIn = success;
-        _isSyncing = false;
-      });
-
-      if (!success && mounted) {
+    if (_syncService == null) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text(
-                'Sign in failed. Please check your Google account and try again.'),
+            content: Text('Cloud Sync service is not initialized.'),
             duration: Duration(seconds: 3),
           ),
         );
-      } else if (success && mounted) {
+      }
+      return;
+    }
+
+    setState(() {
+      _isSyncing = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final credential = await _syncService!.signInWithGoogle();
+
+      setState(() {
+        _isSignedIn = credential.user != null;
+        _isSyncing = false;
+      });
+
+      if (credential.user == null && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Successfully signed in!'),
+            content: Text('Sign in was canceled or failed. Please try again.'),
+            duration: Duration(seconds: 3),
+          ),
+        );
+      } else if (credential.user != null && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Successfully signed in with Google!'),
             duration: Duration(seconds: 2),
           ),
         );
       }
-    } catch (e) {
-      setState(() => _isSyncing = false);
+    } on FirebaseAuthException catch (e) {
+      setState(() {
+        _isSyncing = false;
+        _errorMessage = _getFirebaseErrorMessage(e);
+      });
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error signing in: $e'),
-            duration: const Duration(seconds: 3),
+            content: Text('Sign in error: ${_getFirebaseErrorMessage(e)}'),
+            duration: const Duration(seconds: 4),
+            action: SnackBarAction(
+              label: 'Dismiss',
+              onPressed: () {},
+            ),
           ),
         );
       }
+    } catch (e, stackTrace) {
+      print('Sign in error: $e');
+      print('Stack trace: $stackTrace');
+
+      setState(() {
+        _isSyncing = false;
+        _errorMessage = 'Error signing in: ${e.toString()}';
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error signing in: ${e.toString()}'),
+            duration: const Duration(seconds: 4),
+            action: SnackBarAction(
+              label: 'Dismiss',
+              onPressed: () {},
+            ),
+          ),
+        );
+      }
+    }
+  }
+
+  String _getFirebaseErrorMessage(FirebaseAuthException e) {
+    switch (e.code) {
+      case 'account-exists-with-different-credential':
+        return 'An account already exists with a different sign-in method.';
+      case 'invalid-credential':
+        return 'The credential is invalid or has expired.';
+      case 'operation-not-allowed':
+        return 'Google Sign-In is not enabled. Please enable it in Firebase Console.';
+      case 'user-disabled':
+        return 'This account has been disabled.';
+      case 'user-not-found':
+        return 'No account found with this email.';
+      case 'wrong-password':
+        return 'Incorrect password.';
+      case 'network-request-failed':
+        return 'Network error. Please check your internet connection.';
+      case 'too-many-requests':
+        return 'Too many requests. Please try again later.';
+      default:
+        return 'Sign in failed: ${e.message ?? e.code}';
     }
   }
 

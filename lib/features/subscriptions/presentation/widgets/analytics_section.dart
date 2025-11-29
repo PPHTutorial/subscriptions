@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:subscriptions/core/responsive/responsive_helper.dart';
 import '../../domain/subscription.dart';
 
 class AnalyticsSection extends StatelessWidget {
@@ -19,9 +20,9 @@ class AnalyticsSection extends StatelessWidget {
     }
 
     return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      margin: EdgeInsets.all(ResponsiveHelper.spacing(0)),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.all(ResponsiveHelper.spacing(24)),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -29,10 +30,10 @@ class AnalyticsSection extends StatelessWidget {
               'Analytics & Insights',
               style: Theme.of(context).textTheme.titleLarge,
             ),
-            const SizedBox(height: 16),
+            SizedBox(height: ResponsiveHelper.spacing(16)),
             if (inactive.isNotEmpty) ...[
               _buildInactiveSection(context, inactive),
-              const SizedBox(height: 16),
+              SizedBox(height: ResponsiveHelper.spacing(16)),
             ],
             if (inflation != null) ...[
               _buildInflationSection(context, inflation),
@@ -91,7 +92,7 @@ class AnalyticsSection extends StatelessWidget {
                 color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
               ),
         ),
-        const SizedBox(height: 8),
+        SizedBox(height: ResponsiveHelper.spacing(8)),
         ...inactive.take(3).map((sub) => Padding(
               padding: const EdgeInsets.only(bottom: 4),
               child: Row(

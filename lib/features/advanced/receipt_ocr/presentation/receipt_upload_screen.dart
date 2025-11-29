@@ -7,6 +7,10 @@ import '../../../../core/permissions/permission_service.dart';
 import '../../../../core/responsive/responsive_helper.dart';
 import '../../../subscriptions/application/subscription_controller.dart';
 import '../data/receipt_ocr_service.dart';
+import '../data/barcode_parser_service.dart';
+import '../data/barcode_scan_result.dart';
+import 'barcode_scanner_screen.dart';
+import 'camera_mask_screen.dart';
 
 class ReceiptUploadScreen extends ConsumerStatefulWidget {
   const ReceiptUploadScreen({super.key});
@@ -18,6 +22,7 @@ class ReceiptUploadScreen extends ConsumerStatefulWidget {
 
 class _ReceiptUploadScreenState extends ConsumerState<ReceiptUploadScreen> {
   final _ocrService = ReceiptOcrService();
+  final _barcodeParser = BarcodeParserService();
   final _permissionService = PermissionService();
   File? _selectedImage;
   ReceiptFile? _selectedFile;
@@ -79,6 +84,44 @@ class _ReceiptUploadScreenState extends ConsumerState<ReceiptUploadScreen> {
     }
   }
 
+  Future<void> _openCameraWithMask() async {
+    // Request camera permission
+    await _permissionService.requestAllPermissions();
+    final hasCamera = await _permissionService.requestCameraPermission();
+    if (!hasCamera && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Camera permission is required to take photos'),
+        ),
+      );
+      return;
+    }
+
+    if (!mounted) return;
+
+    // Open camera with mask screen
+    final capturedImage = await Navigator.of(context).push<File>(
+      MaterialPageRoute(
+        builder: (context) => CameraMaskScreen(
+          onImageCaptured: (imageFile) {
+            Navigator.of(context).pop(imageFile);
+          },
+        ),
+      ),
+    );
+
+    if (capturedImage != null) {
+      setState(() {
+        _selectedFile = ReceiptFile(
+          file: capturedImage,
+          type: ReceiptFileType.image,
+        );
+        _selectedImage = capturedImage;
+        _result = null;
+      });
+    }
+  }
+
   Future<void> _pickDocument() async {
     // Request all permissions when receipt upload is accessed
     await _permissionService.requestAllPermissions();
@@ -114,6 +157,65 @@ class _ReceiptUploadScreenState extends ConsumerState<ReceiptUploadScreen> {
             duration: const Duration(seconds: 4),
           ),
         );
+      }
+    }
+  }
+
+  Future<void> _openBarcodeScanner() async {
+    // Request camera permission
+    await _permissionService.requestAllPermissions();
+    final hasCamera = await _permissionService.requestCameraPermission();
+    if (!hasCamera && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Camera permission is required to scan barcodes'),
+        ),
+      );
+      return;
+    }
+
+    if (!mounted) return;
+
+    // Open barcode scanner screen
+    final scanResult = await Navigator.of(context).push<BarcodeScanResult>(
+      MaterialPageRoute(
+        builder: (context) => BarcodeScannerScreen(
+          onDataScanned: (result) {
+            Navigator.of(context).pop(result);
+          },
+        ),
+      ),
+    );
+
+    if (scanResult != null) {
+      setState(() => _isProcessing = true);
+
+      try {
+        // Parse barcode data
+        final result = await _barcodeParser.parseBarcodeResult(scanResult);
+        setState(() {
+          _result = result;
+          _isProcessing = false;
+        });
+
+        if (result.success && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Barcode scanned successfully!'),
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+      } catch (e) {
+        setState(() => _isProcessing = false);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to parse barcode: $e'),
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
       }
     }
   }
@@ -247,7 +349,7 @@ class _ReceiptUploadScreenState extends ConsumerState<ReceiptUploadScreen> {
                         SizedBox(width: ResponsiveHelper.spacing(12)),
                         Expanded(
                           child: OutlinedButton.icon(
-                            onPressed: () => _pickImage(true),
+                            onPressed: () => _openCameraWithMask(),
                             icon: const Icon(Icons.camera_alt),
                             label: const Text('Camera'),
                           ),
@@ -259,6 +361,12 @@ class _ReceiptUploadScreenState extends ConsumerState<ReceiptUploadScreen> {
                       onPressed: _pickDocument,
                       icon: const Icon(Icons.insert_drive_file),
                       label: const Text('Pick Document (PDF/DOCX)'),
+                    ),
+                    SizedBox(height: ResponsiveHelper.spacing(12)),
+                    OutlinedButton.icon(
+                      onPressed: _openBarcodeScanner,
+                      icon: const Icon(Icons.qr_code_scanner),
+                      label: const Text('Scan Barcode/QR Code'),
                     ),
                   ],
                 ),

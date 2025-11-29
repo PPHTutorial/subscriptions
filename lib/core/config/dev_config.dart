@@ -6,7 +6,7 @@ import 'package:flutter/foundation.dart';
 class DevConfig {
   /// Enable dev mode to bypass restrictions and ads
   /// Only works in debug mode
-  static const bool enableDevMode = false; // Set to true for testing
+  static const bool enableDevMode = true; // Set to true for testing
 
   /// Check if dev mode is enabled
   /// Only returns true if both enableDevMode is true AND app is in debug mode

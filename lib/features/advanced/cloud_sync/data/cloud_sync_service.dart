@@ -31,78 +31,24 @@ class CloudSyncService {
     }
   }
 
-  /// Sign in with Google
-  ///
-  /// Requires:
-  /// 1. Firebase initialized in main.dart (via Firebase.initializeApp())
-  /// 2. Google Sign-In enabled in Firebase Console
-  /// 3. SHA-1 fingerprint added to Firebase (Android)
-  /// 4. OAuth client ID configured (iOS)
-  /// 5. Run `flutterfire configure` to generate firebase_options.dart
-  Future<bool> signInWithGoogle() async {
-    try {
-      // Check if Firebase is initialized
-      if (!_firebaseAuth.app.isAutomaticDataCollectionEnabled) {
-        // Firebase might not be fully initialized
-        // This is a soft check - the actual initialization happens in main.dart
-      }
-
-      // Create GoogleSignIn instance with email scope
-      // Note: GoogleSignIn() constructor should work, but if it doesn't,
-      // try using GoogleSignIn.standard() or check package version
-      final GoogleSignIn googleSignIn = GoogleSignIn(
-        scopes: <String>['email'],
-      );
-
-      // Trigger the sign-in flow
-      // This opens the Google Sign-In dialog
-      // If signIn() doesn't work, the package API may have changed
-      final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
-
-      // User canceled the sign-in
-      if (googleUser == null) {
-        return false;
-      }
-
-      // Obtain the auth details from the request
-      // This gets the access token and ID token from Google
-      final GoogleSignInAuthentication googleAuth =
-          await googleUser.authentication;
-
-      // Verify we have the required tokens
-      if (googleAuth.accessToken == null || googleAuth.idToken == null) {
-        // Missing required tokens - sign-in cannot proceed
-        return false;
-      }
-
-      // Create a new credential for Firebase Authentication
-      final credential = GoogleAuthProvider.credential(
-        accessToken: googleAuth.accessToken,
-        idToken: googleAuth.idToken,
-      );
-
-      // Sign in to Firebase with the Google credential
-      // This links the Google account to Firebase Auth
-      final UserCredential userCredential =
-          await _firebaseAuth.signInWithCredential(credential);
-
-      // Verify sign-in was successful
-      if (userCredential.user != null) {
-        return true;
-      }
-
-      return false;
-    } on FirebaseAuthException {
-      // Handle Firebase-specific errors
-      // Error codes: account-exists-with-different-credential, invalid-credential, operation-not-allowed
-      return false;
-    } on Exception {
-      // Handle other errors (network, configuration, etc.)
-      return false;
-    } catch (_) {
-      // Catch-all for any other errors
-      return false;
+  Future<UserCredential> signInWithGoogle() async {
+    // Step 1: Trigger Google Sign-In flow
+    final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
+    if (googleUser == null) {
+      throw Exception("User cancelled sign-in");
     }
+
+    final GoogleSignInAuthentication googleAuth =
+        await googleUser.authentication;
+
+    final credential = GoogleAuthProvider.credential(
+      accessToken: googleAuth.accessToken,
+      idToken: googleAuth.idToken,
+    );
+
+    final userCredential =
+        await FirebaseAuth.instance.signInWithCredential(credential);
+    return userCredential;
   }
 
   /// Sign in with Apple (iOS only)

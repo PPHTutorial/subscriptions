@@ -45,6 +45,7 @@ dependencies:
   share_plus: ^7.2.1
   url_launcher: ^6.2.4
   path_provider: ^2.1.2
+  csv: ^6.0.0
   package_info_plus: ^9.0.0
   device_info_plus: ^9.1.0
   in_app_review: ^2.0.8
@@ -86,6 +87,9 @@ dependencies:
   # OCR & Image Processing
   google_mlkit_text_recognition: ^0.15.0
   image_picker: ^1.0.7
+  camera: ^0.11.0+2
+  image_cropper: ^5.0.1
+  mobile_scanner: ^5.2.3
   
   # File Picking & Document Reading
   file_picker: ^8.1.2

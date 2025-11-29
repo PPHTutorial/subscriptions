@@ -110,7 +110,7 @@ class _NativeAdWidgetState extends ConsumerState<NativeAdWidget> {
     // Use default AdMob settings - no custom containers, labels, margins, padding, or decorations
     return SizedBox(
       width: ResponsiveHelper.screenWidth(context),
-      height: ResponsiveHelper.screenHeight(context) * 0.34,
+      height: ResponsiveHelper.screenHeight(context) * 0.45,
       child: AdWidget(ad: _nativeAd!),
     );
   }

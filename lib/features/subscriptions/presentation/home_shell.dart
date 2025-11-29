@@ -7,6 +7,11 @@ import '../../../core/feedback/rating_service.dart';
 import '../../../core/feedback/subscription_feedback_dialog.dart';
 import '../../../core/navigation/double_back_exit.dart';
 import '../../../core/notifications/notification_service.dart';
+import '../../../core/premium/premium_restrictions.dart';
+import '../../../core/premium/premium_provider.dart';
+import '../../../core/premium/premium_screen.dart';
+import '../../advanced/cloud_sync/data/cloud_sync_provider.dart';
+import '../../advanced/cloud_sync/presentation/cloud_sync_screen.dart';
 import '../../advanced/email_scanner/presentation/email_scanner_screen.dart';
 import '../../advanced/receipt_ocr/presentation/receipt_upload_screen.dart';
 import '../../advanced/sms_scanner/presentation/sms_scanner_screen.dart';
@@ -154,6 +159,10 @@ class _HomeShellState extends ConsumerState<HomeShell> {
                   controller: _searchController,
                   autofocus: true,
                   decoration: InputDecoration(
+                    fillColor: Colors.transparent,
+                    contentPadding: EdgeInsets.symmetric(
+                      horizontal: ResponsiveHelper.spacing(16),
+                    ),
                     hintText: 'Search services, payment methods...',
                     border: UnderlineInputBorder(
                       borderSide: BorderSide(
@@ -277,94 +286,65 @@ class _HomeShellState extends ConsumerState<HomeShell> {
                   ),
                 ],
               ),
-              // Filter menu for subscriptions screen
-              PopupMenuButton(
+              // Filter button for subscriptions screen
+              IconButton(
                 icon: const Icon(Icons.filter_list_rounded),
                 tooltip: 'Filter',
-                itemBuilder: (context) {
-                  final menuItems = <PopupMenuEntry<dynamic>>[
-                    // Trials Only filter
-                    PopupMenuItem(
-                      child: StatefulBuilder(
-                        builder: (context, setState) => CheckboxListTile(
-                          title: const Text('Trials only'),
-                          value: _showTrialsOnly,
-                          onChanged: (value) {
-                            setState(() => _showTrialsOnly = value ?? false);
-                            this.setState(() {});
-                            Navigator.pop(context);
-                          },
-                          controlAffinity: ListTileControlAffinity.leading,
-                          contentPadding: EdgeInsets.zero,
-                        ),
-                      ),
-                    ),
-                    const PopupMenuDivider(),
-                    // Category filters header
-                    PopupMenuItem(
-                      enabled: false,
-                      child: Text(
-                        'Category',
-                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .onSurface
-                                  .withOpacity(0.6),
-                            ),
-                      ),
-                    ),
-                    // All categories option
-                    PopupMenuItem(
-                      child: StatefulBuilder(
-                        builder: (context, setState) =>
-                            RadioListTile<SubscriptionCategory?>(
-                          title: const Text('All'),
-                          value: null,
-                          groupValue: _selectedCategory,
-                          onChanged: (value) {
-                            setState(() => _selectedCategory = value);
-                            this.setState(() {});
-                            Navigator.pop(context);
-                          },
-                          contentPadding: EdgeInsets.zero,
-                          dense: true,
-                        ),
-                      ),
-                    ),
-                  ];
-
-                  // Add individual category options
-                  for (final category in SubscriptionCategory.values) {
-                    menuItems.add(
-                      PopupMenuItem(
-                        child: StatefulBuilder(
-                          builder: (context, setState) =>
-                              RadioListTile<SubscriptionCategory?>(
-                            title: Text(category.displayName),
-                            value: category,
-                            groupValue: _selectedCategory,
-                            onChanged: (value) {
-                              setState(() => _selectedCategory = value);
-                              this.setState(() {});
-                              Navigator.pop(context);
-                            },
-                            contentPadding: EdgeInsets.zero,
-                            dense: true,
-                          ),
-                        ),
-                      ),
-                    );
-                  }
-                  return menuItems;
-                },
+                onPressed: () => _showFilterDialog(context),
               ),
             ],
-            if (!_isSearchExpanded || _index != 1)
+            if (!_isSearchExpanded || _index != 1) ...[
+              // Sign-in button for overview screen (index 0)
+              if (_index == 0)
+                Consumer(
+                  builder: (context, ref, _) {
+                    final signedInAsync = ref.watch(cloudSyncSignedInProvider);
+                    return signedInAsync.when(
+                      data: (isSignedIn) {
+                        if (!isSignedIn) {
+                          return IconButton(
+                            icon: const Icon(Icons.login_rounded),
+                            tooltip: 'Sign in with Google',
+                            onPressed: () => _handleSignIn(context, ref),
+                          );
+                        }
+                        return const SizedBox.shrink();
+                      },
+                      loading: () => const SizedBox.shrink(),
+                      error: (_, __) => const SizedBox.shrink(),
+                    );
+                  },
+                ),
+              // Premium status indicator
+              Consumer(
+                builder: (context, ref, _) {
+                  final premiumStatus =
+                      ref.watch(premiumStatusProvider).maybeWhen(
+                            data: (premium) => premium,
+                            orElse: () => false,
+                          );
+                  if (premiumStatus) {
+                    return IconButton(
+                      icon: const Icon(Icons.star_rounded),
+                      tooltip: 'Premium Active',
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (context) => const PremiumScreen(),
+                          ),
+                        );
+                      },
+                    );
+                  }
+                  return const SizedBox.shrink();
+                },
+              ),
               IconButton(
                 icon: const Icon(Icons.add_rounded),
                 tooltip: 'Add subscription',
                 onPressed: _openCreateSheet,
               ),
+            ],
           ],
         ),
         body: AnimatedSwitcher(
@@ -378,6 +358,233 @@ class _HomeShellState extends ConsumerState<HomeShell> {
         label: const Text('Add subscription'),
       ),
       floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked, */
+      ),
+    );
+  }
+
+  Future<void> _showFilterDialog(BuildContext context) async {
+    bool tempShowTrialsOnly = _showTrialsOnly;
+    SubscriptionCategory? tempSelectedCategory = _selectedCategory;
+
+    await showDialog(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => Dialog(
+          insetPadding:
+              EdgeInsets.symmetric(horizontal: ResponsiveHelper.spacing(28)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+          ),
+          child: Container(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.of(context).size.height * 0.8,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Header
+                Container(
+                  padding: EdgeInsets.all(ResponsiveHelper.spacing(20)),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.primaryContainer,
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(24),
+                      topRight: Radius.circular(24),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: EdgeInsets.all(ResponsiveHelper.spacing(8)),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.primary,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(
+                          Icons.filter_list_rounded,
+                          color: Theme.of(context).colorScheme.onPrimary,
+                          size: 24,
+                        ),
+                      ),
+                      SizedBox(width: ResponsiveHelper.spacing(12)),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Filter Subscriptions',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleLarge
+                                  ?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onPrimaryContainer,
+                                  ),
+                            ),
+                            SizedBox(height: ResponsiveHelper.spacing(4)),
+                            Text(
+                              'Customize your subscription view',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.copyWith(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onPrimaryContainer
+                                        .withOpacity(0.7),
+                                  ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close_rounded),
+                        onPressed: () => Navigator.of(context).pop(),
+                        color: Theme.of(context).colorScheme.onPrimaryContainer,
+                      ),
+                    ],
+                  ),
+                ),
+                // Content - Static Trials Only filter
+                Padding(
+                  padding: EdgeInsets.fromLTRB(
+                    ResponsiveHelper.spacing(20),
+                    ResponsiveHelper.spacing(20),
+                    ResponsiveHelper.spacing(20),
+                    ResponsiveHelper.spacing(12),
+                  ),
+                  child: _FilterOptionCard(
+                    title: 'Trials Only',
+                    subtitle: 'Show only trial subscriptions',
+                    icon: Icons.flash_on_rounded,
+                    isSelected: tempShowTrialsOnly,
+                    onTap: () {
+                      setDialogState(() {
+                        tempShowTrialsOnly = !tempShowTrialsOnly;
+                      });
+                    },
+                  ),
+                ),
+                // Scrollable Category section
+                Flexible(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: ResponsiveHelper.spacing(20),
+                        ),
+                        child: Text(
+                          'Category',
+                          style:
+                              Theme.of(context).textTheme.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                        ),
+                      ),
+                      SizedBox(height: ResponsiveHelper.spacing(12)),
+                      Flexible(
+                        child: SingleChildScrollView(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: ResponsiveHelper.spacing(20),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // All categories option
+                              _CategoryOption(
+                                title: 'All',
+                                subtitle: 'Show all categories',
+                                isSelected: tempSelectedCategory == null,
+                                onTap: () {
+                                  setDialogState(() {
+                                    tempSelectedCategory = null;
+                                  });
+                                },
+                              ),
+                              SizedBox(height: ResponsiveHelper.spacing(8)),
+                              // Individual category options
+                              ...SubscriptionCategory.values.map(
+                                (category) => Padding(
+                                  padding: EdgeInsets.only(
+                                    bottom: ResponsiveHelper.spacing(8),
+                                  ),
+                                  child: _CategoryOption(
+                                    title: category.displayName,
+                                    isSelected:
+                                        tempSelectedCategory == category,
+                                    onTap: () {
+                                      setDialogState(() {
+                                        tempSelectedCategory = category;
+                                      });
+                                    },
+                                  ),
+                                ),
+                              ),
+                              SizedBox(height: ResponsiveHelper.spacing(8)),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                // Actions
+                Container(
+                  padding: EdgeInsets.all(ResponsiveHelper.spacing(16)),
+                  decoration: BoxDecoration(
+                    border: Border(
+                      top: BorderSide(
+                        color: Theme.of(context)
+                            .colorScheme
+                            .outline
+                            .withOpacity(0.2),
+                      ),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () {
+                            Navigator.of(context).pop();
+                          },
+                          style: OutlinedButton.styleFrom(
+                            padding: EdgeInsets.symmetric(
+                              vertical: ResponsiveHelper.spacing(14),
+                            ),
+                          ),
+                          child: const Text('Cancel'),
+                        ),
+                      ),
+                      SizedBox(width: ResponsiveHelper.spacing(12)),
+                      Expanded(
+                        flex: 2,
+                        child: FilledButton(
+                          onPressed: () {
+                            setState(() {
+                              _showTrialsOnly = tempShowTrialsOnly;
+                              _selectedCategory = tempSelectedCategory;
+                            });
+                            Navigator.of(context).pop();
+                          },
+                          style: FilledButton.styleFrom(
+                            padding: EdgeInsets.symmetric(
+                              vertical: ResponsiveHelper.spacing(14),
+                            ),
+                          ),
+                          child: const Text('Apply Filters'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -441,12 +648,52 @@ class _HomeShellState extends ConsumerState<HomeShell> {
 
     switch (choice) {
       case AddSubscriptionChoice.manual:
+        // Check subscription limit before opening sheet
+        final currentSubscriptions =
+            ref.read(subscriptionControllerProvider).maybeWhen(
+                  data: (subs) => subs,
+                  orElse: () => <Subscription>[],
+                );
+
+        final canAdd = await PremiumRestrictions.canAddSubscription(
+          ref,
+          currentSubscriptions.length,
+        );
+
+        if (!canAdd) {
+          // Show restriction dialog
+          if (mounted) {
+            await _showSubscriptionLimitDialog(context);
+          }
+          return;
+        }
+
         // Show interstitial ad before opening the sheet
         await AdNavigationHelper.showModalBottomSheetWithInterstitial(
           context,
           (_) => AddSubscriptionSheet(
             onSubmit: (subscription) async {
               try {
+                // Check again before actually adding
+                final currentSubs =
+                    ref.read(subscriptionControllerProvider).maybeWhen(
+                          data: (subs) => subs,
+                          orElse: () => <Subscription>[],
+                        );
+
+                final canStillAdd =
+                    await PremiumRestrictions.canAddSubscription(
+                  ref,
+                  currentSubs.length,
+                );
+
+                if (!canStillAdd) {
+                  if (mounted) {
+                    await _showSubscriptionLimitDialog(context);
+                  }
+                  return;
+                }
+
                 await notifier.addSubscription(subscription);
                 if (mounted) Navigator.of(context).pop();
               } catch (e) {
@@ -461,24 +708,256 @@ class _HomeShellState extends ConsumerState<HomeShell> {
         );
         break;
       case AddSubscriptionChoice.receipt:
+        // Check premium restriction
+        final isReceiptRestricted = await PremiumRestrictions.isRestricted(
+          ref,
+          RestrictionType.advancedFeatures,
+        );
+        if (isReceiptRestricted) {
+          if (mounted) {
+            await _showPremiumRequiredDialog(context);
+          }
+          return;
+        }
         await AdNavigationHelper.navigateWithInterstitial(
           context,
           const ReceiptUploadScreen(),
         );
         break;
       case AddSubscriptionChoice.sms:
+        // Check premium restriction
+        final isSmsRestricted = await PremiumRestrictions.isRestricted(
+          ref,
+          RestrictionType.advancedFeatures,
+        );
+        if (isSmsRestricted) {
+          if (mounted) {
+            await _showPremiumRequiredDialog(context);
+          }
+          return;
+        }
         await AdNavigationHelper.navigateWithInterstitial(
           context,
           const SmsScannerScreen(),
         );
         break;
       case AddSubscriptionChoice.email:
+        // Check premium restriction
+        final isEmailRestricted = await PremiumRestrictions.isRestricted(
+          ref,
+          RestrictionType.advancedFeatures,
+        );
+        if (isEmailRestricted) {
+          if (mounted) {
+            await _showPremiumRequiredDialog(context);
+          }
+          return;
+        }
         await AdNavigationHelper.navigateWithInterstitial(
           context,
           const EmailScannerScreen(),
         );
         break;
     }
+  }
+
+  Future<void> _handleSignIn(BuildContext context, WidgetRef ref) async {
+    final service = ref.read(cloudSyncServiceProvider);
+    if (service == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Cloud Sync is not available'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+      return;
+    }
+
+    try {
+      // Show loading indicator
+      if (mounted) {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => const Center(
+            child: CircularProgressIndicator(),
+          ),
+        );
+      }
+
+      // Attempt sign-in
+      final credential = await service.signInWithGoogle();
+
+      // Close loading dialog
+
+      print('credential: ${credential.user?.email}');
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+
+      if (credential.user != null) {
+        // Refresh the state
+        ref.invalidate(cloudSyncSignedInProvider);
+        ref.invalidate(cloudSyncUserEmailProvider);
+
+        // Show success message
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Successfully signed in!'),
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+
+        // Navigate to Cloud Sync screen after successful login
+        if (mounted) {
+          await Future.delayed(const Duration(milliseconds: 500));
+          await Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => const CloudSyncScreen(),
+            ),
+          );
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Sign-in was canceled'),
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      // Close loading dialog if still open
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+
+      // Show error message
+      if (mounted) {
+        final errorMessage = _getSignInErrorMessage(e);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(errorMessage),
+            duration: const Duration(seconds: 4),
+            action: SnackBarAction(
+              label: 'Details',
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const CloudSyncScreen(),
+                  ),
+                );
+              },
+            ),
+          ),
+        );
+      }
+    }
+  }
+
+  String _getSignInErrorMessage(dynamic error) {
+    final errorString = error.toString().toLowerCase();
+
+    if (errorString.contains('apiException: 10') ||
+        errorString.contains('developer_error')) {
+      return 'Google Sign-In Error: Please add your SHA-1 fingerprint to Firebase Console. See FIREBASE_SETUP.md for instructions.';
+    }
+
+    if (errorString.contains('network') || errorString.contains('connection')) {
+      return 'Network error. Please check your internet connection and try again.';
+    }
+
+    if (errorString.contains('sign_in_failed')) {
+      return 'Sign-in failed. Please check your Firebase configuration.';
+    }
+
+    return 'Sign-in error: ${error.toString()}';
+  }
+
+  Future<void> _showPremiumRequiredDialog(BuildContext context) async {
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.star_outline_rounded),
+            SizedBox(width: 12),
+            Expanded(child: Text('Premium Feature')),
+          ],
+        ),
+        content: const Text(
+          'This feature is available for Premium users only. Upgrade to unlock all advanced features.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => const PremiumScreen(),
+                ),
+              );
+            },
+            child: const Text('Upgrade to Premium'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showSubscriptionLimitDialog(BuildContext context) async {
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.info_outline_rounded),
+            SizedBox(width: 12),
+            Expanded(child: Text('Subscription Limit Reached')),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'You\'ve reached the free limit of ${PremiumRestrictions.maxFreeSubscriptions} subscriptions.',
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Upgrade to Premium to add unlimited subscriptions and unlock all features.',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => const PremiumScreen(),
+                ),
+              );
+            },
+            child: const Text('Upgrade to Premium'),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -571,6 +1050,200 @@ class _AddSubscriptionDialog extends StatelessWidget {
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
               child: const Text('Cancel'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FilterOptionCard extends StatelessWidget {
+  const _FilterOptionCard({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: EdgeInsets.all(ResponsiveHelper.spacing(16)),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? Theme.of(context).colorScheme.primaryContainer
+              : Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isSelected
+                ? Theme.of(context).colorScheme.primary
+                : Theme.of(context).colorScheme.outline.withOpacity(0.2),
+            width: isSelected ? 2 : 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: EdgeInsets.all(ResponsiveHelper.spacing(10)),
+              decoration: BoxDecoration(
+                color: isSelected
+                    ? Theme.of(context).colorScheme.primary
+                    : Theme.of(context)
+                        .colorScheme
+                        .onSurfaceVariant
+                        .withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(
+                icon,
+                color: isSelected
+                    ? Theme.of(context).colorScheme.onPrimary
+                    : Theme.of(context).colorScheme.onSurfaceVariant,
+                size: 24,
+              ),
+            ),
+            SizedBox(width: ResponsiveHelper.spacing(16)),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: isSelected
+                              ? Theme.of(context).colorScheme.onPrimaryContainer
+                              : null,
+                        ),
+                  ),
+                  SizedBox(height: ResponsiveHelper.spacing(4)),
+                  Text(
+                    subtitle,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: isSelected
+                              ? Theme.of(context)
+                                  .colorScheme
+                                  .onPrimaryContainer
+                                  .withOpacity(0.7)
+                              : Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant
+                                  .withOpacity(0.7),
+                        ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              isSelected ? Icons.check_circle_rounded : Icons.circle_outlined,
+              color: isSelected
+                  ? Theme.of(context).colorScheme.primary
+                  : Theme.of(context)
+                      .colorScheme
+                      .onSurfaceVariant
+                      .withOpacity(0.4),
+              size: 28,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CategoryOption extends StatelessWidget {
+  const _CategoryOption({
+    required this.title,
+    this.subtitle,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  final String title;
+  final String? subtitle;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: EdgeInsets.symmetric(
+          horizontal: ResponsiveHelper.spacing(16),
+          vertical: ResponsiveHelper.spacing(14),
+        ),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? Theme.of(context).colorScheme.primaryContainer
+              : Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.3),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected
+                ? Theme.of(context).colorScheme.primary
+                : Theme.of(context).colorScheme.outline.withOpacity(0.2),
+            width: isSelected ? 2 : 1,
+          ),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    title,
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                          fontWeight:
+                              isSelected ? FontWeight.w600 : FontWeight.normal,
+                          color: isSelected
+                              ? Theme.of(context).colorScheme.onPrimaryContainer
+                              : null,
+                        ),
+                  ),
+                  if (subtitle != null) ...[
+                    SizedBox(height: ResponsiveHelper.spacing(2)),
+                    Text(
+                      subtitle!,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: isSelected
+                                ? Theme.of(context)
+                                    .colorScheme
+                                    .onPrimaryContainer
+                                    .withOpacity(0.7)
+                                : Theme.of(context)
+                                    .colorScheme
+                                    .onSurfaceVariant
+                                    .withOpacity(0.6),
+                          ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            SizedBox(width: ResponsiveHelper.spacing(12)),
+            Icon(
+              isSelected ? Icons.check_circle_rounded : Icons.circle_outlined,
+              color: isSelected
+                  ? Theme.of(context).colorScheme.primary
+                  : Theme.of(context)
+                      .colorScheme
+                      .onSurfaceVariant
+                      .withOpacity(0.4),
+              size: 24,
             ),
           ],
         ),

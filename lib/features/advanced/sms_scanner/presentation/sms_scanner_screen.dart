@@ -94,6 +94,7 @@ class _SmsScannerScreenState extends ConsumerState<SmsScannerScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Card(
+              margin: EdgeInsets.only(bottom: ResponsiveHelper.spacing(16)),
               child: Padding(
                 padding: EdgeInsets.all(ResponsiveHelper.spacing(24)),
                 child: Column(

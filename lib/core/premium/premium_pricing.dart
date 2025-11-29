@@ -4,10 +4,10 @@ import 'premium_service.dart';
 class PremiumPricing {
   /// Pricing for each tier (in USD - will be converted to base currency)
   static const Map<PremiumTier, double> pricing = {
-    PremiumTier.monthly: 4.99,
-    PremiumTier.quarterly: 12.99, // ~3 months, saves ~$2.98
-    PremiumTier.yearly: 39.99, // ~12 months, saves ~$19.89
-    PremiumTier.lifetime: 99.99, // One-time payment
+    PremiumTier.monthly: 9.99,
+    PremiumTier.quarterly: 29.99, // ~3 months, saves ~$2.98
+    PremiumTier.half_yearly: 59.99, // One-time payment
+    PremiumTier.yearly: 119.99, // ~12 months, saves ~$19.89
   };
 
   /// Get price for a tier
@@ -27,13 +27,13 @@ class PremiumPricing {
         // 3 months at monthly rate vs quarterly rate
         final monthlyTotal = monthlyPrice * 3;
         return ((monthlyTotal - tierPrice) / monthlyTotal) * 100;
-      case PremiumTier.yearly:
-        // 12 months at monthly rate vs yearly rate
-        final monthlyTotal = monthlyPrice * 12;
+      case PremiumTier.half_yearly:
+        // 6 months at monthly rate vs yearly rate
+        final monthlyTotal = monthlyPrice * 6;
         return ((monthlyTotal - tierPrice) / monthlyTotal) * 100;
-      case PremiumTier.lifetime:
+      case PremiumTier.yearly:
         // Assume lifetime = 2 years of monthly
-        final monthlyTotal = monthlyPrice * 24;
+        final monthlyTotal = monthlyPrice * 12;
         return ((monthlyTotal - tierPrice) / monthlyTotal) * 100;
       default:
         return 0.0;

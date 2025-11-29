@@ -5,7 +5,7 @@ import 'premium_provider.dart';
 /// Restrictions for free users
 class PremiumRestrictions {
   /// Maximum subscriptions for free users
-  static const int maxFreeSubscriptions = 10;
+  static const int maxFreeSubscriptions = 3;
 
   /// Maximum reminders for free users
   static const int maxFreeReminders = 3;
