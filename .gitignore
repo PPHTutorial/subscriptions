@@ -50,3 +50,5 @@ app.*.map.json
 .env.*
 !/.env.example
 assets/data/bin_database_source.json
+android/app/google-services.json
+ios/Runner/GoogleService-Info.plist
