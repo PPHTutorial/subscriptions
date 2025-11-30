@@ -1261,7 +1261,7 @@ class _EmailProviderSelectionDialogState
               child: SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisAlignment: MainAxisAlignment.center, 
                   children: EmailProvider.values.map((provider) {
                     final isSelected = _selectedProvider == provider;
                     return Padding(
