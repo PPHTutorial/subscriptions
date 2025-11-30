@@ -39,6 +39,7 @@ class Subscription {
         BillingCycle.weekly => 'Weekly',
         BillingCycle.monthly => 'Monthly',
         BillingCycle.quarterly => 'Quarterly',
+        BillingCycle.halfYearly => 'Half-Yearly',
         BillingCycle.yearly => 'Yearly',
         BillingCycle.custom => 'Custom',
       };
@@ -127,7 +128,7 @@ class Subscription {
   }
 }
 
-enum BillingCycle { weekly, monthly, quarterly, yearly, custom }
+enum BillingCycle { weekly, monthly, quarterly, halfYearly, yearly, custom }
 
 enum SubscriptionCategory {
   entertainment,

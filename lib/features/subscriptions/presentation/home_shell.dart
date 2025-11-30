@@ -149,6 +149,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
 
     return DoubleBackExit(
       child: Scaffold(
+        backgroundColor: Theme.of(context).colorScheme.surface,
         extendBody:
             false, // Changed to false so content doesn't hide behind bottom nav
         extendBodyBehindAppBar:
@@ -294,21 +295,40 @@ class _HomeShellState extends ConsumerState<HomeShell> {
               ),
             ],
             if (!_isSearchExpanded || _index != 1) ...[
-              // Sign-in button for overview screen (index 0)
+              // Cloud Sync / Sign-in button for overview screen (index 0)
               if (_index == 0)
                 Consumer(
                   builder: (context, ref, _) {
                     final signedInAsync = ref.watch(cloudSyncSignedInProvider);
                     return signedInAsync.when(
                       data: (isSignedIn) {
-                        if (!isSignedIn) {
+                        if (isSignedIn) {
+                          // Show cloud icon when signed in
+                          return IconButton(
+                            icon: const Icon(Icons.cloud_rounded),
+                            tooltip: 'Cloud Sync',
+                            onPressed: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => const CloudSyncScreen(),
+                                ),
+                              );
+                            },
+                          );
+                        } else {
+                          // Show sign-in icon when not signed in
                           return IconButton(
                             icon: const Icon(Icons.login_rounded),
-                            tooltip: 'Sign in with Google',
-                            onPressed: () => _handleSignIn(context, ref),
+                            tooltip: 'Sign in',
+                            onPressed: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => const CloudSyncScreen(),
+                                ),
+                              );
+                            },
                           );
                         }
-                        return const SizedBox.shrink();
                       },
                       loading: () => const SizedBox.shrink(),
                       error: (_, __) => const SizedBox.shrink(),
@@ -759,124 +779,6 @@ class _HomeShellState extends ConsumerState<HomeShell> {
         );
         break;
     }
-  }
-
-  Future<void> _handleSignIn(BuildContext context, WidgetRef ref) async {
-    final service = ref.read(cloudSyncServiceProvider);
-    if (service == null) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Cloud Sync is not available'),
-            duration: Duration(seconds: 2),
-          ),
-        );
-      }
-      return;
-    }
-
-    try {
-      // Show loading indicator
-      if (mounted) {
-        showDialog(
-          context: context,
-          barrierDismissible: false,
-          builder: (context) => const Center(
-            child: CircularProgressIndicator(),
-          ),
-        );
-      }
-
-      // Attempt sign-in
-      final credential = await service.signInWithGoogle();
-
-      // Close loading dialog
-
-      print('credential: ${credential.user?.email}');
-      if (mounted) {
-        Navigator.of(context).pop();
-      }
-
-      if (credential.user != null) {
-        // Refresh the state
-        ref.invalidate(cloudSyncSignedInProvider);
-        ref.invalidate(cloudSyncUserEmailProvider);
-
-        // Show success message
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Successfully signed in!'),
-              duration: Duration(seconds: 2),
-            ),
-          );
-        }
-
-        // Navigate to Cloud Sync screen after successful login
-        if (mounted) {
-          await Future.delayed(const Duration(milliseconds: 500));
-          await Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => const CloudSyncScreen(),
-            ),
-          );
-        }
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Sign-in was canceled'),
-              duration: Duration(seconds: 2),
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      // Close loading dialog if still open
-      if (mounted) {
-        Navigator.of(context).pop();
-      }
-
-      // Show error message
-      if (mounted) {
-        final errorMessage = _getSignInErrorMessage(e);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(errorMessage),
-            duration: const Duration(seconds: 4),
-            action: SnackBarAction(
-              label: 'Details',
-              onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => const CloudSyncScreen(),
-                  ),
-                );
-              },
-            ),
-          ),
-        );
-      }
-    }
-  }
-
-  String _getSignInErrorMessage(dynamic error) {
-    final errorString = error.toString().toLowerCase();
-
-    if (errorString.contains('apiException: 10') ||
-        errorString.contains('developer_error')) {
-      return 'Google Sign-In Error: Please add your SHA-1 fingerprint to Firebase Console. See FIREBASE_SETUP.md for instructions.';
-    }
-
-    if (errorString.contains('network') || errorString.contains('connection')) {
-      return 'Network error. Please check your internet connection and try again.';
-    }
-
-    if (errorString.contains('sign_in_failed')) {
-      return 'Sign-in failed. Please check your Firebase configuration.';
-    }
-
-    return 'Sign-in error: ${error.toString()}';
   }
 
   Future<void> _showPremiumRequiredDialog(BuildContext context) async {

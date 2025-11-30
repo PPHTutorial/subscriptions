@@ -5,10 +5,53 @@ import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:share_plus/share_plus.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../../features/subscriptions/domain/subscription.dart';
 
 /// Service for exporting subscription data
 class ExportService {
+  /// Get the best directory for saving exported files
+  /// Tries Downloads folder first, falls back to app documents directory
+  Future<Directory> _getExportDirectory() async {
+    // Try to get Downloads directory (more accessible)
+    try {
+      if (Platform.isAndroid) {
+        // On Android, try external storage Downloads folder
+        final externalDir = await getExternalStorageDirectory();
+        if (externalDir != null) {
+          // Navigate to Downloads folder
+          final downloadsPath = externalDir.path
+              .replaceAll(
+                  '/Android/data/${externalDir.path.split('/').where((p) => p.contains('.')).first}/files',
+                  '')
+              .replaceAll(RegExp(r'/files.*'), '');
+
+          // Try common Downloads paths
+          final possiblePaths = [
+            '/storage/emulated/0/Download',
+            '/sdcard/Download',
+            '${externalDir.path.split('/Android')[0]}/Download',
+          ];
+
+          for (final path in possiblePaths) {
+            final dir = Directory(path);
+            if (await dir.exists()) {
+              return dir;
+            }
+          }
+        }
+      } else if (Platform.isIOS) {
+        // On iOS, use app documents directory (can be accessed via Files app)
+        return await getApplicationDocumentsDirectory();
+      }
+    } catch (e) {
+      // Fall through to default
+    }
+
+    // Fallback to app documents directory
+    return await getApplicationDocumentsDirectory();
+  }
+
   /// Export subscriptions to CSV
   Future<File> exportToCsv(List<Subscription> subscriptions) async {
     final List<List<dynamic>> rows = [
@@ -50,13 +93,40 @@ class ExportService {
     // Convert to CSV string
     final csvString = const ListToCsvConverter().convert(rows);
 
-    // Save to file
-    final directory = await getApplicationDocumentsDirectory();
+    // Save to file in accessible location
+    final directory = await _getExportDirectory();
     final timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
-    final file = File('${directory.path}/subscriptions_$timestamp.csv');
+    final fileName = 'subscriptions_$timestamp.csv';
+    final file = File('${directory.path}/$fileName');
     await file.writeAsString(csvString);
 
     return file;
+  }
+
+  /// Get the file path for display to user
+  String getFileDisplayPath(File file) {
+    final path = file.path;
+    // On Android, show a more user-friendly path
+    if (Platform.isAndroid) {
+      if (path.contains('/Download')) {
+        return 'Downloads/${file.path.split('/').last}';
+      } else if (path.contains('/Android/data')) {
+        // Extract app name and show relative path
+        final parts = path.split('/Android/data/');
+        if (parts.length > 1) {
+          final appPath = parts[1].split('/files/');
+          if (appPath.length > 1) {
+            return 'App Files/${appPath[1]}';
+          }
+        }
+      }
+    } else if (Platform.isIOS) {
+      // On iOS, files in Documents can be accessed via Files app
+      if (path.contains('/Documents')) {
+        return 'Files App > On My iPhone > Subscriptions/${file.path.split('/').last}';
+      }
+    }
+    return file.path;
   }
 
   /// Export subscriptions to PDF
@@ -121,10 +191,11 @@ class ExportService {
       ),
     );
 
-    // Save to file
-    final directory = await getApplicationDocumentsDirectory();
+    // Save to file in accessible location
+    final directory = await _getExportDirectory();
     final timestamp = DateFormat('yyyyMMdd_HHmmss').format(DateTime.now());
-    final file = File('${directory.path}/subscriptions_$timestamp.pdf');
+    final fileName = 'subscriptions_$timestamp.pdf';
+    final file = File('${directory.path}/$fileName');
     await file.writeAsBytes(await pdf.save());
 
     return file;

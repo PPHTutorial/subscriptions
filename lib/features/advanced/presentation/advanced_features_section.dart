@@ -69,6 +69,7 @@ class AdvancedFeaturesSection extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return Card(
+      color: Theme.of(context).colorScheme.surfaceContainer,
       child: Padding(
         padding: EdgeInsets.all(ResponsiveHelper.spacing(16)),
         child: Column(
@@ -81,7 +82,10 @@ class AdvancedFeaturesSection extends ConsumerWidget {
                 style: Theme.of(context).textTheme.titleLarge,
               ),
             ),
-            const Divider(height: 1),
+            Divider(
+              height: 1,
+              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.2),
+            ),
             _FeatureTile(
               icon: Icons.email_rounded,
               title: 'Email Scanner',
@@ -148,7 +152,10 @@ class AdvancedFeaturesSection extends ConsumerWidget {
                 );
               },
             ),
-            const Divider(height: 1),
+            Divider(
+              height: 1,
+              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.2),
+            ),
             _FeatureTile(
               icon: Icons.cloud_sync_rounded,
               title: 'Cloud Sync',

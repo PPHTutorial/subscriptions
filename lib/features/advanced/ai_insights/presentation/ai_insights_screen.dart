@@ -17,6 +17,7 @@ class AiInsightsScreen extends ConsumerWidget {
     final insightsService = AiInsightsService();
 
     return Scaffold(
+      backgroundColor: Theme.of(context).colorScheme.surface,
       appBar: AppBar(
         title: const Text('AI Insights'),
       ),
@@ -163,6 +164,7 @@ class _InsightCard extends ConsumerWidget {
     }
 
     return Card(
+color: Theme.of(context).colorScheme.surfaceContainer,
       margin: EdgeInsets.only(bottom: ResponsiveHelper.spacing(12)),
       child: Padding(
         padding: EdgeInsets.all(ResponsiveHelper.spacing(16)),

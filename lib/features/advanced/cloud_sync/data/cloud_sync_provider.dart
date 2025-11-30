@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/config/app_config.dart';
 import 'cloud_sync_service.dart';
@@ -6,41 +8,85 @@ import 'cloud_sync_service.dart';
 /// Returns null if Firebase is not configured or Cloud Sync is disabled
 final cloudSyncServiceProvider = Provider<CloudSyncService?>((ref) {
   try {
-    if (!AppConfig.isFirebaseConfigured || !AppConfig.enableCloudSync) {
+    // Check configuration first
+    if (!AppConfig.isFirebaseConfigured) {
+      developer.log(
+        'CloudSyncService: Firebase is not configured',
+        name: 'CloudSyncProvider',
+      );
       return null;
     }
-    return CloudSyncService();
-  } catch (e) {
+
+    if (!AppConfig.enableCloudSync) {
+      developer.log(
+        'CloudSyncService: Cloud Sync is disabled',
+        name: 'CloudSyncProvider',
+      );
+      return null;
+    }
+
+    // Try to create the service
+    final service = CloudSyncService();
+    developer.log(
+      'CloudSyncService: Service created successfully',
+      name: 'CloudSyncProvider',
+    );
+    return service;
+  } catch (e, stackTrace) {
+    developer.log(
+      'CloudSyncService: Failed to create service: $e',
+      name: 'CloudSyncProvider',
+      error: e,
+      stackTrace: stackTrace,
+    );
     return null;
   }
 });
 
 /// Provider for checking if user is signed in
-final cloudSyncSignedInProvider = StreamProvider<bool>((ref) async* {
+/// Uses StreamProvider to listen to auth state changes
+final cloudSyncSignedInProvider = StreamProvider<bool>((ref) {
   final service = ref.watch(cloudSyncServiceProvider);
+
   if (service == null) {
-    yield false;
-    return;
+    developer.log(
+      'cloudSyncSignedInProvider: Service is null, returning false',
+      name: 'CloudSyncProvider',
+    );
+    return Stream.value(false);
   }
 
-  // Initial check
-  yield service.isSignedIn;
-
-  // Listen to auth state changes
-  yield* service.firebaseAuth.authStateChanges().map((user) => user != null);
+  // Return a stream that listens to auth state changes
+  return service.firebaseAuth.authStateChanges().map((User? user) {
+    final isSignedIn = user != null;
+    developer.log(
+      'cloudSyncSignedInProvider: Auth state changed - isSignedIn: $isSignedIn',
+      name: 'CloudSyncProvider',
+    );
+    return isSignedIn;
+  });
 });
 
 /// Provider for current user email
-final cloudSyncUserEmailProvider = FutureProvider<String?>((ref) async {
+/// Uses StreamProvider to listen to auth state changes
+final cloudSyncUserEmailProvider = StreamProvider<String?>((ref) {
   final service = ref.watch(cloudSyncServiceProvider);
-  if (service == null || !service.isSignedIn) {
-    return null;
+
+  if (service == null) {
+    return Stream.value(null);
   }
 
-  try {
-    final user = service.firebaseAuth.currentUser;
-    return user?.email ?? user?.displayName ?? user?.uid;
-  } catch (e) {
-    return null;
-  }
+  // Return a stream that listens to auth state changes
+  return service.firebaseAuth.authStateChanges().map((User? user) {
+    if (user == null) {
+      return null;
+    }
+
+    final email = user.email ?? user.displayName ?? user.uid;
+    developer.log(
+      'cloudSyncUserEmailProvider: User email: $email',
+      name: 'CloudSyncProvider',
+    );
+    return email;
+  });
 });

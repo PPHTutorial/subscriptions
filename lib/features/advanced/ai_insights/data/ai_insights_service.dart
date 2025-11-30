@@ -1,7 +1,9 @@
 import '../../../subscriptions/domain/subscription.dart';
 import '../../../../core/currency/currency_conversion_service.dart';
 import 'insights_dataset.dart';
-import 'ollama_insights_service.dart';
+// AI model services are available but disabled by default
+// import 'ollama_insights_service.dart';
+// import 'ner_insights_service.dart';
 
 /// Service for generating AI-powered insights about subscriptions
 class AiInsightsService {
@@ -63,11 +65,6 @@ class AiInsightsService {
         totalWaste += convertedCost;
         fromCurrency = sub.currencyCode;
       }
-
-      final baseCurrency = await _currencyService.convertToBase(
-        amount: totalWaste,
-        fromCurrency: fromCurrency,
-      );
 
       return Insight(
         type: InsightType.waste,
@@ -285,6 +282,7 @@ class AiInsightsService {
       BillingCycle.weekly => cost * 4.3,
       BillingCycle.monthly => cost,
       BillingCycle.quarterly => cost / 3,
+      BillingCycle.halfYearly => cost / 6,
       BillingCycle.yearly => cost / 12,
       BillingCycle.custom => cost,
     };
@@ -298,22 +296,50 @@ class AiInsightsService {
     );
   }
 
-  /// Generate AI-powered insights using Ollama (optional)
+  /// Generate insights - defaults to rule-based (reliable, works offline)
   ///
-  /// Can be enhanced to use Ollama for natural language generation
-  /// Falls back to rule-based insights if Ollama is unavailable
+  /// AI models are disabled by default. Use rule-based insights which:
+  /// - Work offline (no internet required)
+  /// - Are fast and reliable
+  /// - Provide accurate insights based on subscription data
   ///
-  /// For production: Ollama server must be deployed to cloud or provided by user
-  /// Default behavior: Uses rule-based insights (works offline, no server needed)
+  /// AI models (NER/Ollama) are optional and disabled by default.
+  /// Only enable if you have working AI infrastructure.
   Future<List<Insight>> generateAiInsights(
     List<Subscription> subscriptions, {
+    bool enableNer = false,
+    String? nerServerUrl,
     bool enableOllama = false,
     String? ollamaServerUrl,
   }) async {
-    // Default: Use rule-based insights (works offline, no server needed)
-    // This ensures the app works perfectly for all app store users
+    // Default: Always use rule-based insights (reliable, works offline)
+    // This ensures the app works perfectly for all users without AI dependencies
 
-    // Optionally enhance with Ollama if enabled and server URL provided
+    // AI models are disabled by default - only use if explicitly enabled
+    // and confirmed working. Rule-based insights are more reliable.
+    return generateInsights(subscriptions);
+
+    // Note: AI model code is kept for future use but disabled by default
+    // Uncomment below only if you have working AI infrastructure:
+
+    /*
+    // Prefer NER model if available (MPNet/DistilBERT via Hugging Face)
+    if (enableNer) {
+      try {
+        final nerService = NerInsightsService(
+          apiKey: nerServerUrl, // Hugging Face API key (optional)
+          useNer: true,
+        );
+        if (await nerService.isNerAvailable()) {
+          return await nerService.generateInsights(subscriptions);
+        }
+      } catch (e) {
+        // Fall back to rule-based insights
+        print('NER model not available, using rule-based insights: $e');
+      }
+    }
+
+    // Optionally enhance with Ollama if enabled and server URL provided (legacy)
     if (enableOllama && ollamaServerUrl != null) {
       try {
         final ollamaService = OllamaInsightsService(
@@ -328,9 +354,7 @@ class AiInsightsService {
         print('Ollama not available, using rule-based insights: $e');
       }
     }
-
-    // Use rule-based insights (default - works for all users)
-    return generateInsights(subscriptions);
+    */
   }
 }
 

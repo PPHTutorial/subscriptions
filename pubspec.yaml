@@ -88,7 +88,7 @@ dependencies:
   google_mlkit_text_recognition: ^0.15.0
   image_picker: ^1.0.7
   camera: ^0.11.0+2
-  image_cropper: ^5.0.1
+  image_cropper: ^8.0.2
   mobile_scanner: ^5.2.3
   
   # File Picking & Document Reading

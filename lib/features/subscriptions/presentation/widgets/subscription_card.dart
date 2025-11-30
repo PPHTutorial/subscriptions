@@ -26,7 +26,8 @@ class SubscriptionCard extends ConsumerWidget {
     final colorScheme = theme.colorScheme;
 
     // Use dark version of primary color for card background
-    final cardColor = colorScheme.surface; // _darkenColor(colorScheme.primary);
+    final cardColor =
+        colorScheme.secondaryContainer; // _darkenColor(colorScheme.primary);
 
     // Text color - use onPrimary for contrast with dark primary background
     final textColor = colorScheme.onSurface;
@@ -51,9 +52,7 @@ class SubscriptionCard extends ConsumerWidget {
         margin: const EdgeInsets.symmetric(vertical: 8),
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
-          color: Theme.of(context).brightness == Brightness.dark
-              ? const Color(0xFF1E293B)
-              : cardColor,
+          color: cardColor,
           borderRadius: BorderRadius.circular(24),
           border: Border.all(
             color: theme.colorScheme.primary.withOpacity(0.1),
@@ -104,6 +103,8 @@ class SubscriptionCard extends ConsumerWidget {
                       Expanded(
                         child: Text(
                           subscription.serviceName,
+                          overflow: TextOverflow.ellipsis,
+                          maxLines: 1,
                           style:
                               Theme.of(context).textTheme.titleLarge?.copyWith(
                                     color: textColor,

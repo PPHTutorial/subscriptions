@@ -55,8 +55,8 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
       final result = _parseBarcodeData(data, type);
 
       if (mounted) {
+        // Callback will handle navigation
         widget.onDataScanned(result);
-        Navigator.pop(context);
       }
     } catch (e) {
       if (mounted) {
@@ -189,7 +189,7 @@ class _BarcodeScannerScreenState extends State<BarcodeScannerScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: Theme.of(context).colorScheme.surface,
       appBar: AppBar(
         title: const Text('Scan Barcode/QR Code'),
         backgroundColor: Colors.black,

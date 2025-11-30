@@ -36,6 +36,7 @@ class SubscriptionDetailsScreen extends ConsumerWidget {
     final colorScheme = theme.colorScheme;
 
     return Scaffold(
+      backgroundColor: Theme.of(context).colorScheme.surface,
       appBar: AppBar(
         title: Text(currentSubscription.serviceName),
         actions: [
@@ -58,6 +59,7 @@ class SubscriptionDetailsScreen extends ConsumerWidget {
           children: [
             // Main info card
             Card(
+              color: Theme.of(context).colorScheme.surfaceContainer,
               child: Padding(
                 padding: EdgeInsets.all(ResponsiveHelper.spacing(24)),
                 child: Column(
@@ -195,6 +197,8 @@ class SubscriptionDetailsScreen extends ConsumerWidget {
             SizedBox(height: ResponsiveHelper.spacing(16)),
             // Reminders card
             Card(
+              color: Theme.of(context).colorScheme.surfaceContainer,
+              margin: EdgeInsets.all(ResponsiveHelper.spacing(8)),
               child: Padding(
                 padding: EdgeInsets.all(ResponsiveHelper.spacing(24)),
                 child: Column(
@@ -236,6 +240,7 @@ class SubscriptionDetailsScreen extends ConsumerWidget {
                 currentSubscription.notes!.isNotEmpty) ...[
               SizedBox(height: ResponsiveHelper.spacing(16)),
               Card(
+                color: Theme.of(context).colorScheme.surfaceContainer,
                 child: Padding(
                   padding: EdgeInsets.all(ResponsiveHelper.spacing(24)),
                   child: Column(

@@ -31,6 +31,7 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen> {
     final currencySymbol = currencyInfo?.symbol ?? baseCurrency;
 
     return Scaffold(
+      backgroundColor: Theme.of(context).colorScheme.surface,
       appBar: AppBar(
         title: const Text('Upgrade to Premium'),
       ),
@@ -39,7 +40,7 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen> {
         children: [
           // Header
           Card(
-            color: Theme.of(context).colorScheme.primaryContainer,
+            color: Theme.of(context).colorScheme.surfaceContainer,
             child: Padding(
               padding: EdgeInsets.all(ResponsiveHelper.spacing(24)),
               child: Column(
@@ -350,10 +351,10 @@ class _PricingCard extends StatelessWidget {
     final displayPrice = PremiumPricing.getDisplayPrice(tier, currencySymbol);
 
     return Card(
+      color: Theme.of(context).colorScheme.surfaceContainer,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
       ),
-      color: isSelected ? Theme.of(context).colorScheme.primaryContainer : null,
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(12),

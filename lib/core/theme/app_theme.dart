@@ -8,49 +8,14 @@ class AppTheme {
       AppColorScheme scheme, Brightness brightness) {
     switch (scheme) {
       case AppColorScheme.purple:
-        if (brightness == Brightness.dark) {
-          return ColorScheme(
-            brightness: brightness,
-            primary: const Color(0xFF6247EA), // Primary Purple
-            onPrimary: Colors.white,
-            secondary: const Color(0xFF7E57C2), // Deep Amethyst
-            onSecondary: Colors.white,
-            tertiary: const Color(0xFFE040FB), // Electric Purple / Neon Violet
-            onTertiary: Colors.white,
-            error: const Color(0xFFB00020),
-            onError: Colors.white,
-            surface: const Color(0xFF1E293B),
-            onSurface: const Color(0xFFE2E8F0),
-            surfaceVariant: const Color(0xFF334155),
-            onSurfaceVariant: const Color(0xFFCBD5E1),
-            outline: const Color(0xFF64748B).withOpacity(0.2),
-            shadow: Colors.black,
-            inverseSurface: const Color(0xFFE2E8F0),
-            onInverseSurface: const Color(0xFF0F172A),
-            inversePrimary: const Color(0xFF6247EA),
-          );
-        } else {
-          return ColorScheme(
-            brightness: brightness,
-            primary: const Color(0xFF6247EA), // Primary Purple
-            onPrimary: Colors.white,
-            secondary: const Color(0xFFCE93D8), // Soft Lavender
-            onSecondary: const Color(0xFF1A1A1A),
-            tertiary: const Color(0xFFF06292), // Vibrant Magenta / Pink-Purple
-            onTertiary: Colors.white,
-            error: const Color(0xFFB00020),
-            onError: Colors.white,
-            surface: Colors.white,
-            onSurface: const Color(0xFF0F172A),
-            surfaceVariant: const Color(0xFFF5F6FB),
-            onSurfaceVariant: const Color(0xFF475569),
-            outline: const Color(0xFFCBD5E1).withOpacity(0.3),
-            shadow: Colors.black,
-            inverseSurface: const Color(0xFF0F172A),
-            onInverseSurface: Colors.white,
-            inversePrimary: const Color(0xFF6247EA),
-          );
-        }
+        return ColorScheme.fromSeed(
+          seedColor: const Color(0xFF6247EA), // Primary Purple
+          brightness: brightness,
+          primary: const Color(0xFF6247EA),
+          secondary: brightness == Brightness.dark
+              ? const Color(0xFF7E57C2) // Deep Amethyst for dark
+              : const Color(0xFFCE93D8), // Soft Lavender for light
+        );
       case AppColorScheme.blue:
         return ColorScheme.fromSeed(
           seedColor: const Color(0xFF3AA9FF),
@@ -60,9 +25,9 @@ class AppTheme {
         );
       case AppColorScheme.green:
         return ColorScheme.fromSeed(
-          seedColor: const Color(0xFF25D9B5),
+          seedColor: const Color(0xFF209B26),
           brightness: brightness,
-          primary: const Color(0xFF25D9B5),
+          primary: const Color(0xFF0DA014),
           secondary: const Color(0xFF6247EA),
         );
       case AppColorScheme.pink:
@@ -128,56 +93,12 @@ class AppTheme {
           primary: Colors.grey,
           secondary: Colors.black,
         );
-      case AppColorScheme.yellow:
-        return ColorScheme.fromSeed(
-          seedColor: const Color(0xFFFFD700),
-          brightness: brightness,
-          primary: const Color(0xFFFFD700),
-          secondary: const Color(0xFFFFA500),
-        );
-      case AppColorScheme.red:
-        return ColorScheme.fromSeed(
-          seedColor: const Color(0xFFB00020),
-          brightness: brightness,
-          primary: const Color(0xFFB00020),
-          secondary: const Color(0xFFFF5252),
-        );
-      case AppColorScheme.gray:
-        return ColorScheme.fromSeed(
-          seedColor: const Color(0xFF808080),
-          brightness: brightness,
-          primary: const Color(0xFF808080),
-          secondary: const Color(0xFFA0A0A0),
-        );
-      case AppColorScheme.brown:
-        return ColorScheme.fromSeed(
-          seedColor: const Color(0xFF8B4513),
-          brightness: brightness,
-          primary: const Color(0xFF8B4513),
-          secondary: const Color(0xFFA0522D),
-        );
-      case AppColorScheme.black:
-        return ColorScheme.fromSeed(
-          seedColor: Colors.black,
-          brightness: brightness,
-          primary: Colors.black,
-          secondary: Colors.grey,
-        );
-      case AppColorScheme.white:
-        return ColorScheme.fromSeed(
-          seedColor: Colors.white,
-          brightness: brightness,
-          primary: Colors.grey,
-          secondary: Colors.black,
-        );
     }
   }
 
   static ThemeData build(ThemeState themeState, BuildContext context) {
     final colorScheme =
         _getColorScheme(themeState.colorScheme, themeState.brightness);
-    final isDark = themeState.brightness == Brightness.dark;
-    final neutral = isDark ? const Color(0xFFE2E8F0) : const Color(0xFF0F172A);
 
     // Responsive text sizes using ScreenUtil
     final textTheme = TextTheme(
@@ -261,43 +182,55 @@ class AppTheme {
     return ThemeData(
       useMaterial3: true,
       colorScheme: colorScheme,
-      scaffoldBackgroundColor:
-          isDark ? const Color(0xFF0F172A) : const Color(0xFFF5F6FB),
+      // Use surfaceVariant for scaffold background to adapt to color scheme
+      scaffoldBackgroundColor: colorScheme.surfaceVariant,
       textTheme: textTheme.apply(
-        bodyColor: neutral,
-        displayColor: neutral,
+        bodyColor: colorScheme.onSurface,
+        displayColor: colorScheme.onSurface,
       ),
       appBarTheme: AppBarTheme(
-        backgroundColor:
-            isDark ? const Color(0xFF1E293B) : const Color(0xFFF5F6FB),
-        foregroundColor: neutral,
+        backgroundColor: colorScheme.surface,
+        foregroundColor: colorScheme.onSurface,
         elevation: 0,
         centerTitle: false,
-        titleTextStyle: textTheme.titleLarge?.copyWith(color: neutral),
+        surfaceTintColor: Colors.transparent,
+        titleTextStyle: textTheme.titleLarge?.copyWith(
+          color: colorScheme.onSurface,
+        ),
+        iconTheme: IconThemeData(
+          color: colorScheme.onSurface,
+        ),
         systemOverlayStyle: SystemUiOverlayStyle(
           statusBarColor: Colors.transparent,
-          statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
-          statusBarBrightness: isDark ? Brightness.dark : Brightness.light,
+          statusBarIconBrightness: colorScheme.brightness == Brightness.dark
+              ? Brightness.light
+              : Brightness.dark,
+          statusBarBrightness: colorScheme.brightness == Brightness.dark
+              ? Brightness.dark
+              : Brightness.light,
+          systemNavigationBarColor: colorScheme.surface,
+          systemNavigationBarIconBrightness:
+              colorScheme.brightness == Brightness.dark
+                  ? Brightness.light
+                  : Brightness.dark,
+          systemNavigationBarDividerColor: Colors.transparent,
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+        // Use surface for input field backgrounds to adapt to color scheme
+        fillColor: colorScheme.surface,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(ResponsiveHelper.spacing(16)),
           borderSide: BorderSide(
-            color: isDark
-                ? const Color(0xFF64748B).withOpacity(0.2)
-                : const Color(0xFFCBD5E1).withOpacity(0.3),
+            color: colorScheme.outline,
             width: 1,
           ),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(ResponsiveHelper.spacing(16)),
           borderSide: BorderSide(
-            color: isDark
-                ? const Color(0xFF64748B).withOpacity(0.2)
-                : const Color(0xFFCBD5E1).withOpacity(0.3),
+            color: colorScheme.outline,
             width: 1,
           ),
         ),
@@ -313,16 +246,16 @@ class AppTheme {
           vertical: ResponsiveHelper.spacing(16),
         ),
         hintStyle: TextStyle(
-          color: neutral.withOpacity(0.4),
+          color: colorScheme.onSurface.withOpacity(0.4),
         ),
         labelStyle: TextStyle(
-          color: neutral.withOpacity(0.7),
+          color: colorScheme.onSurface.withOpacity(0.7),
         ),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           backgroundColor: colorScheme.primary,
-          foregroundColor: Colors.white,
+          foregroundColor: colorScheme.onPrimary,
           textStyle: textTheme.labelLarge,
           padding: EdgeInsets.symmetric(
             vertical: ResponsiveHelper.spacing(16),
@@ -343,21 +276,17 @@ class AppTheme {
         ),
         selectedColor: colorScheme.primary,
         selectedShadowColor: Colors.transparent,
-        checkmarkColor: Colors.white,
-        backgroundColor: isDark
-            ? const Color(0xFF334155).withOpacity(0.5)
-            : const Color(0xFFF1F5F9),
-        deleteIconColor:
-            isDark ? const Color(0xFFE2E8F0) : const Color(0xFF475569),
-        disabledColor: isDark
-            ? const Color(0xFF1E293B).withOpacity(0.3)
-            : const Color(0xFFF1F5F9).withOpacity(0.5),
+        checkmarkColor: colorScheme.onPrimary,
+        // Use surfaceVariant for chip backgrounds - generated from seed color
+        backgroundColor: colorScheme.surfaceVariant.withOpacity(0.5),
+        deleteIconColor: colorScheme.onSurfaceVariant,
+        disabledColor: colorScheme.surfaceVariant.withOpacity(0.3),
         labelStyle: textTheme.bodyMedium?.copyWith(
-          color: isDark ? const Color(0xFFE2E8F0) : const Color(0xFF0F172A),
+          color: colorScheme.onSurface,
           fontWeight: FontWeight.w500,
         ),
         secondaryLabelStyle: textTheme.bodyMedium?.copyWith(
-          color: Colors.white,
+          color: colorScheme.onPrimary,
           fontWeight: FontWeight.w600,
         ),
         padding: EdgeInsets.symmetric(
@@ -368,7 +297,8 @@ class AppTheme {
         pressElevation: 2,
       ),
       cardTheme: CardThemeData(
-        color: isDark ? const Color(0xFF1E293B) : Colors.white,
+        // Use surface for card backgrounds - generated from seed color
+        color: colorScheme.surface,
         elevation: 0,
         shadowColor: Colors.transparent,
         surfaceTintColor: Colors.transparent,
@@ -378,20 +308,19 @@ class AppTheme {
         ),
       ),
       bottomNavigationBarTheme: BottomNavigationBarThemeData(
-        backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+        backgroundColor: colorScheme.surface,
         selectedItemColor: colorScheme.primary,
-        unselectedItemColor: neutral.withOpacity(0.6),
+        unselectedItemColor: colorScheme.onSurface.withOpacity(0.6),
+        elevation: 0,
+        type: BottomNavigationBarType.fixed,
       ),
       dividerTheme: DividerThemeData(
-        color: isDark
-            ? const Color(0xFF64748B).withOpacity(0.15)
-            : const Color(0xFFCBD5E1).withOpacity(0.4),
+        // Use outline for dividers - generated from seed color
+        color: colorScheme.outline,
         thickness: 1,
         space: 1,
       ),
-      dividerColor: isDark
-          ? const Color(0xFF64748B).withOpacity(0.15)
-          : const Color(0xFFCBD5E1).withOpacity(0.4),
+      dividerColor: colorScheme.outline,
     );
   }
 }

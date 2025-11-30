@@ -55,6 +55,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final themeState = ref.watch(themeProvider);
 
     return Scaffold(
+      backgroundColor: Theme.of(context).colorScheme.surface,
       body: ListView(
         padding: EdgeInsets.fromLTRB(
             ResponsiveHelper.spacing(8),
@@ -66,6 +67,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         children: [
           _SectionTitle(title: 'Appearance'),
           Card(
+            color: Theme.of(context).colorScheme.surfaceContainer,
             child: Padding(
               padding: EdgeInsets.all(ResponsiveHelper.spacing(16)),
               child: Column(
@@ -77,7 +79,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     onChanged: (_) =>
                         ref.read(themeProvider.notifier).toggleBrightness(),
                   ),
-                  const Divider(height: 1),
+                  Divider(
+                    height: 1,
+                    color: Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withOpacity(0.2),
+                  ),
                   Padding(
                     padding: EdgeInsets.symmetric(
                         vertical: ResponsiveHelper.spacing(16)),
@@ -148,6 +156,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           const SizedBox(height: 24),
           const _SectionTitle(title: 'About'),
           Card(
+            color: Theme.of(context).colorScheme.surfaceContainer,
             // margin: EdgeInsets.all(ResponsiveHelper.spacing(8)),
             child: Padding(
               padding: EdgeInsets.all(ResponsiveHelper.spacing(16)),
@@ -159,13 +168,25 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     subtitle:
                         Text(_appVersion.isEmpty ? 'Loading...' : _appVersion),
                   ),
-                  const Divider(height: 1),
+                  Divider(
+                    height: 1,
+                    color: Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withOpacity(0.2),
+                  ),
                   ListTile(
                     leading: const Icon(Icons.star_outline),
                     title: const Text('Rate app'),
                     onTap: _rateApp,
                   ),
-                  const Divider(height: 1),
+                  Divider(
+                    height: 1,
+                    color: Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withOpacity(0.2),
+                  ),
                   ListTile(
                     leading: const Icon(Icons.share),
                     title: const Text('Share app'),
@@ -178,6 +199,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           const SizedBox(height: 24),
           _SectionTitle(title: 'Legal'),
           Card(
+            color: Theme.of(context).colorScheme.surfaceContainer,
             child: Padding(
               padding: EdgeInsets.all(ResponsiveHelper.spacing(16)),
               child: Column(
@@ -192,7 +214,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       ),
                     ),
                   ),
-                  const Divider(height: 1),
+                  Divider(
+                    height: 1,
+                    color: Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withOpacity(0.2),
+                  ),
                   ListTile(
                     leading: const Icon(Icons.description_outlined),
                     title: const Text('Terms of Service'),
@@ -390,6 +418,7 @@ class _NotificationSettingsSectionState
     final settingsNotifier = ref.read(notificationSettingsProvider.notifier);
 
     return Card(
+      color: Theme.of(context).colorScheme.surfaceContainer,
       child: Padding(
         padding: EdgeInsets.all(ResponsiveHelper.spacing(16)),
         child: Column(
@@ -402,14 +431,20 @@ class _NotificationSettingsSectionState
               onChanged: (value) => settingsNotifier.setEnabled(value),
             ),
             if (settings.enabled) ...[
-              const Divider(height: 1),
+              Divider(
+                height: 1,
+                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.2),
+              ),
               SwitchListTile(
                 title: const Text('Sound'),
                 subtitle: const Text('Play sound for notifications'),
                 value: settings.soundEnabled,
                 onChanged: (value) => settingsNotifier.setSoundEnabled(value),
               ),
-              const Divider(height: 1),
+              Divider(
+                height: 1,
+                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.2),
+              ),
               SwitchListTile(
                 title: const Text('Vibration'),
                 subtitle: const Text('Vibrate for notifications'),
@@ -417,7 +452,10 @@ class _NotificationSettingsSectionState
                 onChanged: (value) =>
                     settingsNotifier.setVibrationEnabled(value),
               ),
-              const Divider(height: 1),
+              Divider(
+                height: 1,
+                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.2),
+              ),
               SwitchListTile(
                 title: const Text('Show badge'),
                 subtitle: const Text('Display badge on app icon'),
@@ -427,7 +465,10 @@ class _NotificationSettingsSectionState
             ],
             // Only show test notification in debug mode
             if (kDebugMode) ...[
-              const Divider(height: 1),
+              Divider(
+                height: 1,
+                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.2),
+              ),
               ListTile(
                 leading: const Icon(Icons.notifications_active),
                 title: const Text('Test notification'),
@@ -435,21 +476,30 @@ class _NotificationSettingsSectionState
                 onTap: _testNotification,
               ),
             ],
-            const Divider(height: 1),
+            Divider(
+              height: 1,
+              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.2),
+            ),
             ListTile(
               leading: const Icon(Icons.security),
               title: const Text('Request permissions'),
               subtitle: const Text('Request notification permissions'),
               onTap: _requestPermissions,
             ),
-            const Divider(height: 1),
+            Divider(
+              height: 1,
+              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.2),
+            ),
             ListTile(
               leading: const Icon(Icons.settings),
               title: const Text('System settings'),
               subtitle: const Text('Open system notification settings'),
               onTap: _openSystemSettings,
             ),
-            const Divider(height: 1),
+            Divider(
+              height: 1,
+              color: Theme.of(context).colorScheme.onSurface.withOpacity(0.2),
+            ),
             ExpansionTile(
               leading: const Icon(Icons.schedule),
               title: const Text('Pending notifications'),
@@ -521,6 +571,7 @@ class PremiumSection extends ConsumerWidget {
         );
 
     return Card(
+      color: Theme.of(context).colorScheme.surfaceContainer,
       child: Padding(
         padding: EdgeInsets.all(ResponsiveHelper.spacing(16)),
         child: Column(
@@ -566,6 +617,7 @@ class ExportDataSection extends ConsumerWidget {
     final exportService = ExportService();
 
     return Card(
+      color: Theme.of(context).colorScheme.surfaceContainer,
       child: Padding(
         padding: EdgeInsets.all(ResponsiveHelper.spacing(16)),
         child: Column(
@@ -681,10 +733,46 @@ class ExportDataSection extends ConsumerWidget {
       await exportService.shareFile(file);
 
       if (context.mounted) {
+        final filePath = exportService.getFileDisplayPath(file);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Subscriptions exported to ${format.toUpperCase()}'),
-            duration: const Duration(seconds: 2),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Subscriptions exported to ${format.toUpperCase()}',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Saved to: $filePath',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withOpacity(0.7),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'File shared via system share sheet. You can save it to Downloads, Drive, or any app.',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withOpacity(0.6),
+                  ),
+                ),
+              ],
+            ),
+            duration: const Duration(seconds: 5),
+            action: SnackBarAction(
+              label: 'OK',
+              onPressed: () {},
+            ),
           ),
         );
       }
@@ -764,8 +852,9 @@ class _CurrencySettingsSectionState
     final filteredCurrencies = CurrencyList.searchCurrencies(_searchQuery);
 
     return Card(
+      color: Theme.of(context).colorScheme.surfaceContainer,
       child: Padding(
-        padding: EdgeInsets.all(ResponsiveHelper.spacing(16)),
+        padding: EdgeInsets.all(ResponsiveHelper.spacing(24)),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

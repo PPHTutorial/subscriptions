@@ -104,13 +104,14 @@ class _ReceiptUploadScreenState extends ConsumerState<ReceiptUploadScreen> {
       MaterialPageRoute(
         builder: (context) => CameraMaskScreen(
           onImageCaptured: (imageFile) {
+            // Pop and return the image file
             Navigator.of(context).pop(imageFile);
           },
         ),
       ),
     );
 
-    if (capturedImage != null) {
+    if (capturedImage != null && mounted) {
       setState(() {
         _selectedFile = ReceiptFile(
           file: capturedImage,
@@ -119,6 +120,8 @@ class _ReceiptUploadScreenState extends ConsumerState<ReceiptUploadScreen> {
         _selectedImage = capturedImage;
         _result = null;
       });
+      // Automatically process the image after selection
+      _processImage();
     }
   }
 
@@ -187,7 +190,7 @@ class _ReceiptUploadScreenState extends ConsumerState<ReceiptUploadScreen> {
       ),
     );
 
-    if (scanResult != null) {
+    if (scanResult != null && mounted) {
       setState(() => _isProcessing = true);
 
       try {
@@ -313,6 +316,7 @@ class _ReceiptUploadScreenState extends ConsumerState<ReceiptUploadScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Theme.of(context).colorScheme.surface,
       appBar: AppBar(
         title: const Text('Receipt Upload'),
       ),
@@ -322,6 +326,7 @@ class _ReceiptUploadScreenState extends ConsumerState<ReceiptUploadScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Card(
+              color: Theme.of(context).colorScheme.surfaceContainer,
               child: Padding(
                 padding: EdgeInsets.all(ResponsiveHelper.spacing(16)),
                 child: Column(
@@ -375,6 +380,7 @@ class _ReceiptUploadScreenState extends ConsumerState<ReceiptUploadScreen> {
             if (_selectedFile != null) ...[
               SizedBox(height: ResponsiveHelper.spacing(20)),
               Card(
+                color: Theme.of(context).colorScheme.surfaceContainer,
                 child: Padding(
                   padding: EdgeInsets.only(top: ResponsiveHelper.spacing(24)),
                   child: Column(
@@ -439,6 +445,7 @@ class _ReceiptUploadScreenState extends ConsumerState<ReceiptUploadScreen> {
             if (_result != null) ...[
               SizedBox(height: ResponsiveHelper.spacing(20)),
               Card(
+                color: Theme.of(context).colorScheme.surfaceContainer,
                 child: Padding(
                   padding: EdgeInsets.all(ResponsiveHelper.spacing(24)),
                   child: Column(
@@ -545,8 +552,8 @@ class _FormattedTextDisplay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final lines = text.split('\n');
     final theme = Theme.of(context);
+    final lines = text.split('\n');
 
     return Container(
       width: double.infinity,
@@ -560,7 +567,7 @@ class _FormattedTextDisplay extends StatelessWidget {
         ),
       ),
       child: SelectableText.rich(
-        _buildFormattedTextSpan(context, lines),
+        _buildFormattedTextSpan(context, lines, theme),
         style: TextStyle(
           fontFamily: 'monospace',
           fontSize: ResponsiveHelper.fontSize(13),
@@ -571,8 +578,8 @@ class _FormattedTextDisplay extends StatelessWidget {
     );
   }
 
-  TextSpan _buildFormattedTextSpan(BuildContext context, List<String> lines) {
-    final theme = Theme.of(context);
+  TextSpan _buildFormattedTextSpan(
+      BuildContext context, List<String> lines, ThemeData theme) {
     final spans = <TextSpan>[];
 
     for (int i = 0; i < lines.length; i++) {
@@ -584,7 +591,7 @@ class _FormattedTextDisplay extends StatelessWidget {
         continue;
       }
 
-      // Preserve multiple spaces for alignment (like Google Lens)
+      // Preserve tabs and multiple spaces for alignment
       final preservedLine = _preserveSpacing(line);
 
       // Check if line looks like a header (all caps, short, or has special formatting)
@@ -614,11 +621,14 @@ class _FormattedTextDisplay extends StatelessWidget {
     return TextSpan(children: spans);
   }
 
-  /// Preserve spacing structure (multiple spaces for alignment)
+  /// Preserve spacing structure (tabs and multiple spaces for alignment)
   String _preserveSpacing(String line) {
-    // Replace multiple spaces with preserved spacing
-    // This maintains the visual layout from the original document
-    return line.replaceAllMapped(RegExp(r' {2,}'), (match) {
+    // Replace tabs with multiple spaces for better display
+    // Tabs are preserved but converted to visible spacing
+    String result = line.replaceAll('\t', '    '); // 4 spaces per tab
+
+    // Preserve multiple spaces for alignment
+    return result.replaceAllMapped(RegExp(r' {2,}'), (match) {
       // Preserve spacing but limit excessive spaces
       final spaceCount = match.group(0)!.length;
       return ' ' * spaceCount.clamp(1, 20);

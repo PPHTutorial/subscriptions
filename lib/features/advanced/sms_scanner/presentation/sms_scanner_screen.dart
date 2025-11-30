@@ -85,6 +85,7 @@ class _SmsScannerScreenState extends ConsumerState<SmsScannerScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Theme.of(context).colorScheme.surface,
       appBar: AppBar(
         title: const Text('SMS Scanner'),
       ),
@@ -94,6 +95,7 @@ class _SmsScannerScreenState extends ConsumerState<SmsScannerScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Card(
+color: Theme.of(context).colorScheme.surfaceContainer,
               margin: EdgeInsets.only(bottom: ResponsiveHelper.spacing(16)),
               child: Padding(
                 padding: EdgeInsets.all(ResponsiveHelper.spacing(24)),
@@ -239,6 +241,7 @@ class _MatchCard extends StatelessWidget {
     final colorScheme = theme.colorScheme;
 
     return Card(
+color: Theme.of(context).colorScheme.surfaceContainer,
       margin: EdgeInsets.only(bottom: ResponsiveHelper.spacing(16)),
       child: Padding(
         padding: EdgeInsets.all(ResponsiveHelper.spacing(16)),

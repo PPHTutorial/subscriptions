@@ -240,6 +240,7 @@ class DashboardScreen extends ConsumerWidget {
         BillingCycle.weekly => subscription.cost * 4.3,
         BillingCycle.monthly => subscription.cost,
         BillingCycle.quarterly => subscription.cost / 3,
+        BillingCycle.halfYearly => subscription.cost / 6,
         BillingCycle.yearly => subscription.cost / 12,
         BillingCycle.custom => subscription.cost,
       };
@@ -496,6 +497,7 @@ class _AiInsightsSection extends ConsumerWidget {
         final topInsights = insights.take(3).toList();
 
         return Card(
+          color: Theme.of(context).colorScheme.surfaceContainer,
           margin: EdgeInsets.only(bottom: ResponsiveHelper.spacing(12)),
           child: Padding(
             padding: EdgeInsets.all(ResponsiveHelper.spacing(24)),
@@ -655,7 +657,8 @@ class _CloudSyncSectionState extends ConsumerState<_CloudSyncSection> {
         if (isSignedIn) {
           // User is signed in - show user details and auto sync
           return Card(
-            color: Theme.of(context).colorScheme.primaryContainer,
+            margin: EdgeInsets.only(bottom: ResponsiveHelper.spacing(12)),
+            color: Theme.of(context).colorScheme.surfaceContainerLow,
             child: Padding(
               padding: EdgeInsets.all(ResponsiveHelper.spacing(16)),
               child: Column(
@@ -814,24 +817,24 @@ class _DashboardInsightCard extends StatelessWidget {
 
     switch (insight.severity) {
       case InsightSeverity.high:
-        backgroundColor = colorScheme.tertiaryContainer;
-        borderColor = colorScheme.tertiary;
-        iconContainerColor = colorScheme.tertiary;
-        iconColor = colorScheme.onTertiaryContainer;
-        titleColor = colorScheme.onTertiaryContainer;
+        backgroundColor = colorScheme.errorContainer;
+        borderColor = colorScheme.errorContainer;
+        iconContainerColor = colorScheme.error;
+        iconColor = colorScheme.onErrorContainer;
+        titleColor = colorScheme.error;
         icon = Icons.warning_rounded;
         break;
       case InsightSeverity.medium:
-        backgroundColor = colorScheme.primaryContainer;
-        borderColor = colorScheme.primary;
-        iconContainerColor = colorScheme.primary;
-        iconColor = colorScheme.onPrimaryContainer;
-        titleColor = colorScheme.onPrimaryContainer;
+        backgroundColor = colorScheme.surfaceContainerHighest;
+        borderColor = colorScheme.surface;
+        iconContainerColor = colorScheme.surfaceContainerLowest;
+        iconColor = colorScheme.onSurface;
+        titleColor = colorScheme.onSurface;
         icon = Icons.info_rounded;
         break;
       case InsightSeverity.low:
-        backgroundColor = colorScheme.secondaryContainer;
-        borderColor = colorScheme.secondary;
+        backgroundColor = colorScheme.surfaceContainerLowest;
+        borderColor = colorScheme.surfaceContainerLowest;
         iconContainerColor = colorScheme.secondary;
         iconColor = colorScheme.onSecondaryContainer;
         titleColor = colorScheme.onSecondaryContainer;

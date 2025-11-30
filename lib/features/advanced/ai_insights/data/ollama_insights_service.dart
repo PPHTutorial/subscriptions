@@ -219,6 +219,8 @@ Only return the insight message, nothing else.
         BillingCycle.quarterly => sub.cost / 3,
         BillingCycle.yearly => sub.cost / 12,
         BillingCycle.custom => sub.cost,
+        // TODO: Handle this case.
+        BillingCycle.halfYearly => sub.cost / 6,
       };
       monthlySpend += normalized;
       byCategory[sub.category] = (byCategory[sub.category] ?? 0) + 1;
@@ -262,6 +264,7 @@ Only return insights in the specified format, nothing else.
         BillingCycle.weekly => sub.cost * 4.3,
         BillingCycle.monthly => sub.cost,
         BillingCycle.quarterly => sub.cost / 3,
+        BillingCycle.halfYearly => sub.cost / 6,
         BillingCycle.yearly => sub.cost / 12,
         BillingCycle.custom => sub.cost,
       };

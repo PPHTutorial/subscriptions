@@ -20,6 +20,7 @@ class AnalyticsSection extends StatelessWidget {
     }
 
     return Card(
+      color: Theme.of(context).colorScheme.surfaceContainer,
       margin: EdgeInsets.all(ResponsiveHelper.spacing(0)),
       child: Padding(
         padding: EdgeInsets.all(ResponsiveHelper.spacing(24)),

@@ -17,6 +17,7 @@ import 'features/subscriptions/presentation/home_shell.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // await AppConfig.initializeFirebase();
 
   // Initialize Firebase if configured
   if (AppConfig.isFirebaseConfigured && AppConfig.enableCloudSync) {
@@ -108,6 +109,7 @@ class _SubscriptionsAppState extends ConsumerState<SubscriptionsApp>
     if (_isLoading) {
       return MaterialApp(
         home: Scaffold(
+          backgroundColor: Theme.of(context).colorScheme.surface,
           body: Center(
             child: CircularProgressIndicator(
               color: AppTheme.build(themeState, context).colorScheme.primary,
@@ -143,25 +145,32 @@ class _SubscriptionsAppState extends ConsumerState<SubscriptionsApp>
           },
           builder: (context, widget) {
             final mediaQuery = MediaQuery.of(context);
-            final isDark = themeState.brightness == Brightness.dark;
 
-            // Wrap with AnnotatedRegion to apply system UI overlay style
+            // Use the system overlay style from the theme's AppBarTheme
+            // This ensures status bar, app bar, and navigation bar colors match the theme
+            final systemOverlayStyle = theme.appBarTheme.systemOverlayStyle;
+
             return AnnotatedRegion<SystemUiOverlayStyle>(
-              value: SystemUiOverlayStyle(
-                // Status bar
-                statusBarColor: Colors.transparent,
-                statusBarIconBrightness:
-                    isDark ? Brightness.light : Brightness.dark,
-                statusBarBrightness:
-                    isDark ? Brightness.dark : Brightness.light,
-                // Navigation bar (Android)
-                systemNavigationBarColor:
-                    isDark ? const Color(0xFF1E293B) : Colors.white,
-                systemNavigationBarIconBrightness:
-                    isDark ? Brightness.light : Brightness.dark,
-                systemNavigationBarDividerColor: Colors.transparent,
-                systemNavigationBarContrastEnforced: false,
-              ),
+              value: systemOverlayStyle ??
+                  SystemUiOverlayStyle(
+                    // Fallback if theme doesn't provide systemOverlayStyle
+                    statusBarColor: Colors.transparent,
+                    statusBarIconBrightness:
+                        themeState.brightness == Brightness.dark
+                            ? Brightness.light
+                            : Brightness.dark,
+                    statusBarBrightness:
+                        themeState.brightness == Brightness.dark
+                            ? Brightness.dark
+                            : Brightness.light,
+                    systemNavigationBarColor: theme.colorScheme.surface,
+                    systemNavigationBarIconBrightness:
+                        themeState.brightness == Brightness.dark
+                            ? Brightness.light
+                            : Brightness.dark,
+                    systemNavigationBarDividerColor: Colors.transparent,
+                    systemNavigationBarContrastEnforced: false,
+                  ),
               child: MediaQuery(
                 data: mediaQuery.copyWith(
                   textScaleFactor: ResponsiveHelper.textScaleFactor(context),

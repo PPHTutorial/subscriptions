@@ -25,13 +25,15 @@ class AlternativesScreen extends ConsumerWidget {
       future: _getConvertedMonthlyCost(subscription, currencyService),
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
-          return const Scaffold(
+          return Scaffold(
+            backgroundColor: Theme.of(context).colorScheme.surface,
             body: Center(child: CircularProgressIndicator()),
           );
         }
         final monthlyCost = snapshot.data!;
 
         return Scaffold(
+          backgroundColor: Theme.of(context).colorScheme.surface,
           appBar: AppBar(
             title: const Text('Alternative Services'),
           ),
@@ -70,10 +72,7 @@ class AlternativesScreen extends ConsumerWidget {
                   children: [
                     // Current subscription card
                     Card(
-                      color: Theme.of(context)
-                          .colorScheme
-                          .surfaceVariant
-                          .withOpacity(0.3),
+                      color: Theme.of(context).colorScheme.surfaceContainer,
                       child: Padding(
                         padding: EdgeInsets.all(ResponsiveHelper.spacing(16)),
                         child: Column(
@@ -168,6 +167,8 @@ class AlternativesScreen extends ConsumerWidget {
         return cost;
       case BillingCycle.quarterly:
         return cost / 3;
+      case BillingCycle.halfYearly:
+        return cost / 6;
       case BillingCycle.yearly:
         return cost / 12;
       case BillingCycle.custom:
@@ -196,6 +197,7 @@ class _AlternativeCard extends StatelessWidget {
     final savingsPercent = (alternative.savings * 100).toStringAsFixed(0);
 
     return Card(
+      color: Theme.of(context).colorScheme.surfaceContainer,
       margin: EdgeInsets.only(bottom: ResponsiveHelper.spacing(12)),
       child: Padding(
         padding: EdgeInsets.all(ResponsiveHelper.spacing(16)),

@@ -54,6 +54,7 @@ class InsightDetailScreen extends ConsumerWidget {
 
     // Fallback
     return Scaffold(
+      backgroundColor: Theme.of(context).colorScheme.surface,
       appBar: AppBar(title: Text(insight.title)),
       body: Center(child: Text(insight.message)),
     );
@@ -79,6 +80,7 @@ class _WasteDetailScreen extends ConsumerWidget {
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
           return Scaffold(
+            backgroundColor: Theme.of(context).colorScheme.surface,
             appBar: AppBar(title: Text('Inactive Subscriptions')),
             body: Center(child: CircularProgressIndicator()),
           );
@@ -86,6 +88,7 @@ class _WasteDetailScreen extends ConsumerWidget {
         final totalWaste = snapshot.data!;
 
         return Scaffold(
+          backgroundColor: Theme.of(context).colorScheme.surface,
           appBar: AppBar(
             title: const Text('Inactive Subscriptions'),
           ),
@@ -94,7 +97,7 @@ class _WasteDetailScreen extends ConsumerWidget {
             children: [
               // Summary card
               Card(
-                color: Theme.of(context).colorScheme.tertiaryContainer,
+                color: Theme.of(context).colorScheme.surfaceContainer,
                 child: Padding(
                   padding: EdgeInsets.all(ResponsiveHelper.spacing(20)),
                   child: Column(
@@ -199,6 +202,8 @@ class _WasteDetailScreen extends ConsumerWidget {
         return cost;
       case BillingCycle.quarterly:
         return cost / 3;
+      case BillingCycle.halfYearly:
+        return cost / 6;
       case BillingCycle.yearly:
         return cost / 12;
       case BillingCycle.custom:
@@ -226,6 +231,7 @@ class _WasteSubscriptionCard extends StatelessWidget {
               DateTime.now().difference(subscription.renewalDate).inDays;
 
           return Card(
+            color: Theme.of(context).colorScheme.surfaceContainer,
             margin: EdgeInsets.only(bottom: ResponsiveHelper.spacing(12)),
             child: Padding(
               padding: EdgeInsets.all(ResponsiveHelper.spacing(16)),
@@ -362,6 +368,8 @@ class _WasteSubscriptionCard extends StatelessWidget {
         return cost;
       case BillingCycle.quarterly:
         return cost / 3;
+      case BillingCycle.halfYearly:
+        return cost / 6;
       case BillingCycle.yearly:
         return cost / 12;
       case BillingCycle.custom:
@@ -394,6 +402,7 @@ class _OverlapDetailScreen extends ConsumerWidget {
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
           return Scaffold(
+            backgroundColor: Theme.of(context).colorScheme.surface,
             appBar: AppBar(title: Text('Overlapping Services')),
             body: Center(child: CircularProgressIndicator()),
           );
@@ -404,6 +413,7 @@ class _OverlapDetailScreen extends ConsumerWidget {
             totalCost * ((subscriptions.length - 1) / subscriptions.length);
 
         return Scaffold(
+          backgroundColor: Theme.of(context).colorScheme.surface,
           appBar: AppBar(
             title: Text('Overlapping $groupName Services'),
           ),
@@ -412,7 +422,7 @@ class _OverlapDetailScreen extends ConsumerWidget {
             children: [
               // Summary card
               Card(
-                color: Theme.of(context).colorScheme.primaryContainer,
+                color: Theme.of(context).colorScheme.surfaceContainer,
                 child: Padding(
                   padding: EdgeInsets.all(ResponsiveHelper.spacing(20)),
                   child: Column(
@@ -560,6 +570,8 @@ class _OverlapDetailScreen extends ConsumerWidget {
         return cost;
       case BillingCycle.quarterly:
         return cost / 3;
+      case BillingCycle.halfYearly:
+        return cost / 6;
       case BillingCycle.yearly:
         return cost / 12;
       case BillingCycle.custom:
@@ -585,6 +597,7 @@ class _OverlapSubscriptionCard extends StatelessWidget {
         final monthlyCost = snapshot.data ?? 0.0;
 
         return Card(
+          color: Theme.of(context).colorScheme.surfaceContainer,
           margin: EdgeInsets.only(bottom: ResponsiveHelper.spacing(12)),
           child: ListTile(
             leading: CircleAvatar(
@@ -637,6 +650,8 @@ class _OverlapSubscriptionCard extends StatelessWidget {
         return cost;
       case BillingCycle.quarterly:
         return cost / 3;
+      case BillingCycle.halfYearly:
+        return cost / 6;
       case BillingCycle.yearly:
         return cost / 12;
       case BillingCycle.custom:
@@ -671,6 +686,7 @@ class _BudgetDetailScreen extends StatelessWidget {
       ..sort((a, b) => b.value.compareTo(a.value));
 
     return Scaffold(
+      backgroundColor: Theme.of(context).colorScheme.surface,
       appBar: AppBar(
         title: const Text('Budget Breakdown'),
       ),
@@ -679,7 +695,7 @@ class _BudgetDetailScreen extends StatelessWidget {
         children: [
           // Summary card
           Card(
-            color: Theme.of(context).colorScheme.primaryContainer,
+            color: Theme.of(context).colorScheme.surfaceContainer,
             child: Padding(
               padding: EdgeInsets.all(ResponsiveHelper.spacing(20)),
               child: Column(
@@ -777,6 +793,8 @@ class _BudgetDetailScreen extends StatelessWidget {
         return cost;
       case BillingCycle.quarterly:
         return cost / 3;
+      case BillingCycle.halfYearly:
+        return cost / 6;
       case BillingCycle.yearly:
         return cost / 12;
       case BillingCycle.custom:
@@ -803,6 +821,7 @@ class _CategorySpendingCard extends StatelessWidget {
     final percentage = (amount / total * 100).toStringAsFixed(1);
 
     return Card(
+      color: Theme.of(context).colorScheme.surfaceContainer,
       margin: EdgeInsets.only(bottom: ResponsiveHelper.spacing(12)),
       child: Padding(
         padding: EdgeInsets.all(ResponsiveHelper.spacing(16)),
@@ -872,6 +891,7 @@ class _UsageDetailScreen extends ConsumerWidget {
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
           return Scaffold(
+            backgroundColor: Theme.of(context).colorScheme.surface,
             appBar: AppBar(title: Text('High-Value Subscriptions')),
             body: Center(child: CircularProgressIndicator()),
           );
@@ -879,6 +899,7 @@ class _UsageDetailScreen extends ConsumerWidget {
         final sortedSubs = snapshot.data!;
 
         return Scaffold(
+          backgroundColor: Theme.of(context).colorScheme.surface,
           appBar: AppBar(
             title: const Text('High-Value Subscriptions'),
           ),
@@ -887,7 +908,7 @@ class _UsageDetailScreen extends ConsumerWidget {
             children: [
               // Summary card
               Card(
-                color: Theme.of(context).colorScheme.secondaryContainer,
+                color: Theme.of(context).colorScheme.surfaceContainer,
                 child: Padding(
                   padding: EdgeInsets.all(ResponsiveHelper.spacing(20)),
                   child: Column(
@@ -974,6 +995,8 @@ class _UsageDetailScreen extends ConsumerWidget {
         return cost;
       case BillingCycle.quarterly:
         return cost / 3;
+      case BillingCycle.halfYearly:
+        return cost / 6;
       case BillingCycle.yearly:
         return cost / 12;
       case BillingCycle.custom:
@@ -998,6 +1021,7 @@ class _UsageSubscriptionCard extends StatelessWidget {
     final yearlyCost = monthlyCost * 12;
 
     return Card(
+      color: Theme.of(context).colorScheme.surfaceContainer,
       margin: EdgeInsets.only(bottom: ResponsiveHelper.spacing(12)),
       child: Padding(
         padding: EdgeInsets.all(ResponsiveHelper.spacing(16)),
@@ -1087,6 +1111,8 @@ class _UsageSubscriptionCard extends StatelessWidget {
         return cost;
       case BillingCycle.quarterly:
         return cost / 3;
+      case BillingCycle.halfYearly:
+        return cost / 6;
       case BillingCycle.yearly:
         return cost / 12;
       case BillingCycle.custom:

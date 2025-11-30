@@ -177,12 +177,16 @@ class ReceiptOcrService {
           // Add spacing based on horizontal gap between elements
           if (previousElementRight != null) {
             final horizontalGap = elementLeft - previousElementRight;
-            // If gap is significant (likely intentional spacing), add spaces
-            if (horizontalGap > 5) {
-              // Calculate approximate number of spaces based on gap
-              final spaces = (horizontalGap / 8).round().clamp(1, 10);
+            // If gap is significant (likely intentional spacing for columns), use tab
+            if (horizontalGap > 20) {
+              // Large gap indicates column separation - use tab
+              textBuffer.write('\t');
+            } else if (horizontalGap > 5) {
+              // Medium gap - add spaces proportional to gap
+              final spaces = (horizontalGap / 8).round().clamp(1, 5);
               textBuffer.write(' ' * spaces);
             } else {
+              // Small gap - normal word spacing
               textBuffer.write(' ');
             }
           }
@@ -203,8 +207,30 @@ class ReceiptOcrService {
 
   /// Intelligent text cleaning with OCR error correction
   String _intelligentTextCleaning(String text) {
-    // Step 1: Fix common OCR character recognition errors
+    // Step 0: Preserve and fix currency symbols (do this first before other replacements)
+    // Common OCR errors for currency symbols
     String cleaned = text
+        // Fix Euro symbol (€) - common OCR mistakes
+        .replaceAll(RegExp(r'[C][\s]*[=]'), '€') // C= to €
+        .replaceAll(RegExp(r'[C][\s]*[-]'), '€') // C- to €
+        .replaceAll(RegExp(r'\bC\s+(?=\d)'), '€') // C before number to €
+        .replaceAll(RegExp(r'[E][\s]*[U][\s]*[R]'), '€') // EUR text to €
+        // Fix Pound symbol (£) - common OCR mistakes
+        .replaceAll(RegExp(r'[L][\s]*[=]'), '£') // L= to £
+        .replaceAll(RegExp(r'[L][\s]*[-]'), '£') // L- to £
+        .replaceAll(RegExp(r'\bL\s+(?=\d)'),
+            '£') // L before number to £ (if not followed by letter)
+        // Fix Dollar symbol ($) - common OCR mistakes
+        .replaceAll(RegExp(r'[S][\s]*[=]'), '\$') // S= to $
+        .replaceAll(RegExp(r'[S][\s]*[-]'), '\$') // S- to $
+        // Fix other currency symbols
+        .replaceAll(RegExp(r'[Y][\s]*[=]'), '¥') // Y= to ¥
+        .replaceAll(RegExp(r'[R][\s]*[=]'), '₹') // R= to ₹
+        .replaceAll(RegExp(r'[C][\s]*[/]'), '¢') // C/ to ¢
+        .replaceAll(RegExp(r'[C][\s]*[.]'), '¢'); // C. to ¢
+
+    // Step 1: Fix common OCR character recognition errors (but preserve currency symbols)
+    cleaned = cleaned
         .replaceAll(RegExp(r'[|]'), 'I') // Pipe to I
         .replaceAll(RegExp(r'\b0([a-z])', caseSensitive: false),
             'O\$1') // 0 to O in words
@@ -346,7 +372,17 @@ class ReceiptOcrService {
       );
     }
 
-    // First, analyze if this text is subscription-related using intelligent scoring
+    // First, check if this is a job application or other non-subscription text
+    if (_isJobApplication(text) || _isNonSubscriptionText(text)) {
+      return ReceiptExtractionResult(
+        success: false,
+        error:
+            'Text appears to be a job application or non-subscription content',
+        rawText: text,
+      );
+    }
+
+    // Then, analyze if this text is subscription-related using intelligent scoring
     final subscriptionScore = _analyzeSubscriptionRelevance(text);
     if (subscriptionScore < 0.3) {
       return ReceiptExtractionResult(
@@ -419,7 +455,7 @@ class ReceiptOcrService {
             originalCurrency: originalCurrency,
             renewalDate: date ?? DateTime.now().add(const Duration(days: 30)),
             billingCycle: billingCycle,
-            category: _inferCategory(inferredName),
+            category: _inferCategory(inferredName, text),
             paymentMethod: _extractPaymentMethod(text, lowerText),
             rawText: text,
           );
@@ -436,7 +472,7 @@ class ReceiptOcrService {
       originalCurrency: originalCurrency,
       renewalDate: date ?? DateTime.now().add(const Duration(days: 30)),
       billingCycle: billingCycle,
-      category: serviceName != null ? _inferCategory(serviceName) : null,
+      category: serviceName != null ? _inferCategory(serviceName, text) : null,
       paymentMethod: _extractPaymentMethod(text, lowerText),
       rawText: text,
     );
@@ -694,33 +730,59 @@ class ReceiptOcrService {
         RegExp(r'^\d{1,2}[/-]\d{1,2}[/-]\d{2,4}').hasMatch(line);
   }
 
-  /// Intelligent cost extraction with flexible pattern matching
+  /// Intelligent cost extraction with flexible pattern matching and total calculation
   Map<String, dynamic>? _intelligentExtractCost(
       String text, String lowerText, List<String> lines) {
+    // First, try to calculate total from line items, VATs, and discounts
+    final calculatedTotal = _calculateTotalFromReceipt(text, lowerText, lines);
+    if (calculatedTotal != null) {
+      return calculatedTotal;
+    }
+
     // More flexible amount patterns that handle various formats
+    // Enhanced currency symbol patterns (including more symbols)
+    // Common currency symbols: $ € £ ¥ ₹ ¢ ₵ ₦ ₨ ₩ ₪ ₫ ₭ ₮ ₯ ₰ ₱ ₲ ₳ ₴ ₵ ₶ ₷ ₸ ₹ ₺ ₻ ₼ ₽ ₾ ₿
+    final currencySymbolsPattern = r'[\$€£¥₹¢₵₦₨₩₪₫₭₮₯₰₱₲₳₴₵₶₷₸₹₺₻₼₽₾₿]';
+
     final flexibleAmountPatterns = [
-      // Patterns with context keywords (highest priority)
+      // Patterns with total keywords (highest priority) - comprehensive total labels
+      // These MUST have currency symbols or codes for validation
       RegExp(
-          r'(?:total|amount\s+due|balance|charge|payment|cost|price|fee|subscription\s+cost)[:\s]*[\$€£¥₹¢]?\s*([\d,]+\.?\d*)',
-          caseSensitive: false),
-      RegExp(r'(?:total|amount|cost|price)[:\s]*([\d,]+\.?\d*)\s*([A-Z]{3})?',
-          caseSensitive: false),
-
-      // Currency symbol patterns (flexible spacing)
-      RegExp(r'[\$€£¥₹¢]\s*([\d,]+\.?\d*)', caseSensitive: false),
-      RegExp(r'([\d,]+\.?\d*)\s*[\$€£¥₹¢]', caseSensitive: false),
-
-      // Currency code patterns (flexible)
-      RegExp(
-          r'([\d,]+\.?\d*)\s*(USD|EUR|GBP|INR|GHS|NGN|ZAR|KES|UGX|TZS|RWF|ETB|CAD|AUD|NZD|JPY|CNY|SGD|HKD|CHF|SEK|NOK|DKK|PLN|CZK|HUF|RON|BGN|HRK)',
+          '(?:total\\s+(?:amount|paid|due|cost|price|charge|balance|to\\s+pay|payable|payable\\s+amount|take\\s+home)|amount\\s+due|total\\s+due|grand\\s+total|final\\s+total|net\\s+total|total\\s+payable|total\\s+to\\s+pay)[:\\s]+$currencySymbolsPattern?\\s*([\\d,]+\\.?\\d*)',
           caseSensitive: false),
       RegExp(
-          r'(USD|EUR|GBP|INR|GHS|NGN|ZAR|KES|UGX|TZS|RWF|ETB|CAD|AUD|NZD|JPY|CNY|SGD|HKD|CHF|SEK|NOK|DKK|PLN|CZK|HUF|RON|BGN|HRK)\s*([\d,]+\.?\d*)',
+          '(?:total|amount\\s+due|balance|charge|payment|cost|price|fee|subscription\\s+cost|take\\s+home)[:\\s]+$currencySymbolsPattern?\\s*([\\d,]+\\.?\\d*)',
+          caseSensitive: false),
+      RegExp(
+          r'(?:total|amount|cost|price|take\s+home)[:\s]+([\d,]+\.?\d*)\s*([A-Z]{3})',
           caseSensitive: false),
 
-      // Generic number patterns (with decimal places)
+      // Patterns with K/M suffixes: $124K, GHS500K, ₵1M, USD 50.77k
+      RegExp(
+          r'(?:total|amount|charge|payment|cost|price|fee|paid|pay|billed)[:\s]*([\$€£¥₹¢₵]|USD|EUR|GBP|INR|GHS|NGN|ZAR|KES|UGX|TZS)\s*([\d,]+\.?\d*)\s*([kmKM]|thousand|million)\b',
+          caseSensitive: false),
+      RegExp(r'([\$€£¥₹¢₵])\s*([\d,]+\.?\d*)\s*([kmKM]|thousand|million)\b',
+          caseSensitive: false),
+      RegExp(
+          r'\b(USD|EUR|GBP|INR|GHS|NGN|ZAR|KES|UGX|TZS)\s*([\d,]+\.?\d*)\s*([kmKM]|thousand|million)\b',
+          caseSensitive: false),
+      // Currency symbol patterns (REQUIRED for validation) - these are more reliable
+      RegExp('$currencySymbolsPattern\\s*([\\d,]+\\.?\\d{1,2})',
+          caseSensitive: false),
+      RegExp('([\\d,]+\\.?\\d{1,2})\\s*$currencySymbolsPattern',
+          caseSensitive: false),
+
+      // Currency code patterns (REQUIRED for validation)
+      RegExp(
+          r'([\d,]+\.?\d{1,2})\s+(USD|EUR|GBP|INR|GHS|NGN|ZAR|KES|UGX|TZS|RWF|ETB|CAD|AUD|NZD|JPY|CNY|SGD|HKD|CHF|SEK|NOK|DKK|PLN|CZK|HUF|RON|BGN|HRK|BRL|MXN|ARS|CLP|COP|PEN|UYU|VES|TRY|RUB|ILS|AED|SAR|QAR|KWD|BHD|OMR|JOD|EGP|MAD|TND|DZD|LYD|SDG|ETB|DJF|SOS|ERN|SSP|AOA|ZMW|BWP|SZL|LSL|MZN|MGA|SCR|MUR|KMF|CDF|RWF|BIF|UGX|TZS|KES|ETB|DJF|SOS|SSP|ERN)',
+          caseSensitive: false),
+      RegExp(
+          r'(USD|EUR|GBP|INR|GHS|NGN|ZAR|KES|UGX|TZS|RWF|ETB|CAD|AUD|NZD|JPY|CNY|SGD|HKD|CHF|SEK|NOK|DKK|PLN|CZK|HUF|RON|BGN|HRK|BRL|MXN|ARS|CLP|COP|PEN|UYU|VES|TRY|RUB|ILS|AED|SAR|QAR|KWD|BHD|OMR|JOD|EGP|MAD|TND|DZD|LYD|SDG|ETB|DJF|SOS|ERN|SSP|AOA|ZMW|BWP|SZL|LSL|MZN|MGA|SCR|MUR|KMF|CDF|RWF|BIF|UGX|TZS|KES|ETB|DJF|SOS|SSP|ERN)\s+([\d,]+\.?\d{1,2})',
+          caseSensitive: false),
+
+      // Generic number patterns with decimals (lower priority, but still valid)
+      // Only accept if they have at least 2 decimal places (more likely to be money)
       RegExp(r'\b([\d,]+\.\d{2})\b', caseSensitive: false),
-      RegExp(r'\b([\d,]+\.\d{1,2})\b', caseSensitive: false),
     ];
 
     List<Map<String, dynamic>> amounts = [];
@@ -728,24 +790,73 @@ class ReceiptOcrService {
     for (final pattern in flexibleAmountPatterns) {
       final matches = pattern.allMatches(text);
       for (final match in matches) {
-        final amountStr = match.group(1)?.replaceAll(',', '') ?? '';
-        final amount = double.tryParse(amountStr);
+        double? amount;
+        String? currency;
+        String? amountStr;
 
-        if (amount != null && amount > 0 && amount < 1000000) {
-          String? currency;
+        // Check if this pattern has K/M suffix (patterns 0-2)
+        if (match.groupCount >= 3 && match.group(3) != null) {
+          // Pattern with K/M suffix
+          amountStr = match.group(2)?.replaceAll(',', '') ?? '';
+          amount = double.tryParse(amountStr);
+          final multiplierStr = match.group(3)?.toLowerCase();
+
+          // Apply K/M multiplier
+          if (amount != null && multiplierStr != null) {
+            if (multiplierStr == 'k' || multiplierStr == 'thousand') {
+              amount = amount * 1000;
+            } else if (multiplierStr == 'm' || multiplierStr == 'million') {
+              amount = amount * 1000000;
+            }
+          }
+
+          // Extract currency from group 1
+          final currencyGroup = match.group(1);
+          if (currencyGroup != null) {
+            currency = _normalizeCurrency(currencyGroup);
+          }
+        } else {
+          // Standard pattern without K/M
+          amountStr = match.group(1)?.replaceAll(',', '') ?? '';
+          amount = double.tryParse(amountStr);
 
           // Extract currency from match
           if (match.groupCount >= 2 && match.group(2) != null) {
-            currency = match.group(2)!.toUpperCase();
+            currency = _normalizeCurrency(match.group(2)!);
           } else {
             currency = _detectCurrencyFromContext(match.group(0) ?? '', text);
           }
+        }
+
+        if (amount != null && amount > 0) {
+          // VALIDATION: Filter out invalid amounts (reasonable subscription range: $0.01 to $100,000)
+          if (amount > 100000) {
+            continue; // Too large for subscription
+          }
+
+          final amountStrForValidation =
+              amountStr.isNotEmpty ? amountStr : amount.toString();
+          if (!_isValidAmount(
+              amount, amountStrForValidation, match.group(0) ?? '', text)) {
+            continue; // Skip invalid amounts
+          }
 
           final matchText = match.group(0);
+          final hasCurrencySymbol =
+              RegExp(currencySymbolsPattern).hasMatch(matchText ?? '');
+          final hasCurrencyCode = match.groupCount >= 2 &&
+              match.group(2) != null &&
+              match.group(2)!.length == 3;
+
           amounts.add({
             'amount': amount,
-            'currency': currency.isNotEmpty ? currency : 'USD',
-            'priority': _getAmountPriority(matchText ?? '', lowerText),
+            'currency':
+                (currency != null && currency.isNotEmpty) ? currency : 'USD',
+            'priority': _getAmountPriority(
+                matchText ?? '', lowerText, hasCurrencySymbol, hasCurrencyCode),
+            'hasCurrencySymbol': hasCurrencySymbol,
+            'hasCurrencyCode': hasCurrencyCode,
+            'matchText': matchText,
           });
         }
       }
@@ -753,9 +864,25 @@ class ReceiptOcrService {
 
     if (amounts.isEmpty) return null;
 
-    // Sort by priority and take the highest
-    amounts
-        .sort((a, b) => (b['priority'] as int).compareTo(a['priority'] as int));
+    // Sort by priority (highest first), then by currency presence, then by amount (larger is better)
+    amounts.sort((a, b) {
+      final priorityCompare =
+          (b['priority'] as int).compareTo(a['priority'] as int);
+      if (priorityCompare != 0) return priorityCompare;
+
+      // Prefer amounts with currency symbols
+      final aHasCurrency =
+          (a['hasCurrencySymbol'] as bool) || (a['hasCurrencyCode'] as bool);
+      final bHasCurrency =
+          (b['hasCurrencySymbol'] as bool) || (b['hasCurrencyCode'] as bool);
+      if (aHasCurrency != bHasCurrency) {
+        return bHasCurrency ? 1 : -1;
+      }
+
+      // Prefer larger amounts (more likely to be totals)
+      return (b['amount'] as double).compareTo(a['amount'] as double);
+    });
+
     final bestMatch = amounts.first;
 
     return {
@@ -764,11 +891,344 @@ class ReceiptOcrService {
     };
   }
 
-  int _getAmountPriority(String match, String lowerText) {
+  /// Validate if an amount is likely a real cost (not a date, phone number, ID, etc.)
+  bool _isValidAmount(
+      double amount, String amountStr, String matchText, String fullText) {
+    // Filter out years (1900-2100)
+    if (amount >= 1900 && amount <= 2100 && amount == amount.roundToDouble()) {
+      // Check if it's actually part of a date pattern
+      final datePattern = RegExp(
+          r'\b(19|20)\d{2}\b.*(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|\d{1,2}[/-]\d{1,2,4})',
+          caseSensitive: false);
+      if (datePattern.hasMatch(fullText)) {
+        return false; // Likely a year in a date
+      }
+      // Also check if it's near date-like patterns
+      final yearStr = amount.toInt().toString();
+      final nearDatePattern = RegExp(
+          '\\b$yearStr\\b.*[/-].*\\d|.*[/-].*\\b$yearStr\\b',
+          caseSensitive: false);
+      if (nearDatePattern.hasMatch(fullText)) {
+        return false; // Likely a year
+      }
+    }
+
+    // Filter out phone numbers (long sequences without decimals, typically 7-15 digits)
+    if (amount == amount.roundToDouble() &&
+        amountStr.length >= 7 &&
+        amountStr.length <= 15 &&
+        !amountStr.contains('.')) {
+      // Check if it looks like a phone number pattern
+      final phonePattern = RegExp(
+          r'\b(\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4,}\b',
+          caseSensitive: false);
+      if (phonePattern.hasMatch(matchText)) {
+        return false; // Likely a phone number
+      }
+    }
+
+    // Filter out very long sequences without decimals (likely IDs, account numbers, etc.)
+    if (amount == amount.roundToDouble() &&
+        amountStr.length > 8 &&
+        !amountStr.contains('.')) {
+      // Unless it has a currency symbol/code, it's probably not a cost
+      final hasCurrency = RegExp(
+              r'[\$€£¥₹¢₵₦₨₩₪₫₭₮₯₰₱₲₳₴₵₶₷₸₹₺₻₼₽₾₿]|USD|EUR|GBP|INR|GHS|NGN',
+              caseSensitive: false)
+          .hasMatch(matchText);
+      if (!hasCurrency) {
+        return false; // Likely an ID or account number
+      }
+    }
+
+    // Filter out very small amounts without currency (likely quantities, percentages, etc.)
+    if (amount < 1.0 && amount > 0) {
+      final hasCurrency = RegExp(
+              r'[\$€£¥₹¢₵₦₨₩₪₫₭₮₯₰₱₲₳₴₵₶₷₸₹₺₻₼₽₾₿]|USD|EUR|GBP|INR|GHS|NGN',
+              caseSensitive: false)
+          .hasMatch(matchText);
+      if (!hasCurrency) {
+        return false; // Likely a quantity or percentage
+      }
+    }
+
+    // Filter out amounts that are too large (unlikely subscription costs)
+    if (amount > 100000) {
+      // Only accept if it has explicit total label and currency
+      final hasTotalLabel = RegExp(
+              r'total|amount|due|payable|balance|charge|payment|cost|price',
+              caseSensitive: false)
+          .hasMatch(matchText);
+      final hasCurrency = RegExp(
+              r'[\$€£¥₹¢₵₦₨₩₪₫₭₮₯₰₱₲₳₴₵₶₷₸₹₺₻₼₽₾₿]|USD|EUR|GBP|INR|GHS|NGN',
+              caseSensitive: false)
+          .hasMatch(matchText);
+      if (!hasTotalLabel || !hasCurrency) {
+        return false; // Too large without context
+      }
+    }
+
+    // Prefer amounts with decimal places (more likely to be money)
+    // But allow whole numbers if they have currency symbols
+    final hasDecimals = amountStr.contains('.');
+    final hasCurrency = RegExp(
+            r'[\$€£¥₹¢₵₦₨₩₪₫₭₮₯₰₱₲₳₴₵₶₷₸₹₺₻₼₽₾₿]|USD|EUR|GBP|INR|GHS|NGN',
+            caseSensitive: false)
+        .hasMatch(matchText);
+
+    // If no currency and no decimals, be more strict
+    if (!hasCurrency && !hasDecimals && amount >= 100) {
+      return false; // Likely not a cost
+    }
+
+    return true;
+  }
+
+  /// Calculate total from receipt by finding subtotals, VATs, and discounts
+  Map<String, dynamic>? _calculateTotalFromReceipt(
+      String text, String lowerText, List<String> lines) {
+    // Find all amounts with their labels
+    final amountEntries = <Map<String, dynamic>>[];
+
+    // Enhanced currency symbol pattern
+    final currencySymbolsPattern = r'[\$€£¥₹¢₵₦₨₩₪₫₭₮₯₰₱₲₳₴₵₶₷₸₹₺₻₼₽₾₿]';
+
+    for (final line in lines) {
+      // Try multiple patterns for better detection
+      // Pattern 1: Label: Amount
+      final pattern1 = RegExp(
+          '([A-Za-z\\s]+?)[:\\s]+($currencySymbolsPattern?\\s*)([\\d,]+\\.?\\d*)',
+          caseSensitive: false);
+      // Pattern 2: Amount Label
+      final pattern2 = RegExp(
+          '($currencySymbolsPattern?\\s*)([\\d,]+\\.?\\d*)\\s+([A-Za-z\\s]+)',
+          caseSensitive: false);
+      // Pattern 3: Label Amount (no symbol)
+      final pattern3 = RegExp(
+          r'([A-Za-z\s]+?)[:\s]+([\d,]+\.?\d*)\s*([A-Z]{3})?',
+          caseSensitive: false);
+
+      final allPatterns = [pattern1, pattern2, pattern3];
+
+      for (final pattern in allPatterns) {
+        final matches = pattern.allMatches(line);
+        for (final match in matches) {
+          String? label;
+          String? amountStr;
+
+          if (pattern == pattern1) {
+            label = match.group(1)?.trim().toLowerCase();
+            amountStr = match.group(3)?.replaceAll(',', '');
+          } else if (pattern == pattern2) {
+            label = match.group(3)?.trim().toLowerCase();
+            amountStr = match.group(2)?.replaceAll(',', '');
+          } else if (pattern == pattern3) {
+            label = match.group(1)?.trim().toLowerCase();
+            amountStr = match.group(2)?.replaceAll(',', '');
+          }
+
+          if (label != null && amountStr != null) {
+            final amount = double.tryParse(amountStr);
+
+            if (amount != null && amount > 0) {
+              // Validate amount before adding
+              final matchText = match.group(0) ?? '';
+              if (!_isValidAmount(amount, amountStr, matchText, text)) {
+                continue; // Skip invalid amounts
+              }
+
+              final currency = _detectCurrencyFromContext(matchText, text);
+              amountEntries.add({
+                'label': label,
+                'amount': amount,
+                'currency': currency,
+                'line': line,
+              });
+            }
+          }
+        }
+      }
+    }
+
+    if (amountEntries.isEmpty) return null;
+
+    if (amountEntries.isEmpty) return null;
+
+    // Group amounts by currency
+    final amountsByCurrency = <String, List<Map<String, dynamic>>>{};
+    for (final entry in amountEntries) {
+      final currency = entry['currency'] as String;
+      amountsByCurrency.putIfAbsent(currency, () => []).add(entry);
+    }
+
+    // Process each currency group separately
+    for (final currencyGroup in amountsByCurrency.entries) {
+      final currency = currencyGroup.key;
+      final entries = currencyGroup.value;
+
+      // Find subtotal/base amount
+      double? subtotal;
+
+      // Look for subtotal, base amount, or first significant amount
+      for (final entry in entries) {
+        final label = entry['label'] as String;
+        if (label.contains('subtotal') ||
+            label.contains('base') ||
+            (label.contains('amount') && !label.contains('total'))) {
+          subtotal = entry['amount'] as double;
+          break;
+        }
+      }
+
+      // If no subtotal found, try to find the largest amount that's not a total/tax/discount
+      if (subtotal == null) {
+        final nonTotalEntries = entries.where((e) {
+          final label = e['label'] as String;
+          return !label.contains('total') &&
+              !label.contains('vat') &&
+              !label.contains('tax') &&
+              !label.contains('gst') &&
+              !label.contains('discount') &&
+              !label.contains('deduction');
+        }).toList();
+
+        if (nonTotalEntries.isNotEmpty) {
+          // Use the largest amount as base
+          nonTotalEntries.sort((a, b) =>
+              (b['amount'] as double).compareTo(a['amount'] as double));
+          subtotal = nonTotalEntries.first['amount'] as double;
+        } else if (entries.isNotEmpty) {
+          // Fallback to first amount
+          subtotal = entries.first['amount'] as double;
+        }
+      }
+
+      if (subtotal == null) continue;
+
+      // Find and add VATs/Taxes
+      double total = subtotal;
+      for (final entry in entries) {
+        final label = entry['label'] as String;
+        final amount = entry['amount'] as double;
+
+        if (label.contains('vat') ||
+            label.contains('tax') ||
+            label.contains('gst') ||
+            label.contains('hst') ||
+            label.contains('pst') ||
+            label.contains('service tax') ||
+            label.contains('sales tax') ||
+            label.contains('value added tax')) {
+          total += amount; // Add taxes
+        }
+      }
+
+      // Find and subtract discounts
+      for (final entry in entries) {
+        final label = entry['label'] as String;
+        final amount = entry['amount'] as double;
+
+        if (label.contains('discount') ||
+            label.contains('deduction') ||
+            label.contains('rebate') ||
+            label.contains('promotion') ||
+            label.contains('coupon') ||
+            label.contains('voucher') ||
+            label.contains('off') ||
+            label.contains('reduction')) {
+          total -= amount; // Subtract discounts
+        }
+      }
+
+      // Ensure total is positive
+      if (total <= 0) continue;
+
+      // Now look for explicit "Total" labels to verify or use
+      for (final entry in entries) {
+        final label = entry['label'] as String;
+        final amount = entry['amount'] as double;
+
+        // Check if this is a total label (comprehensive list)
+        final isTotalLabel = (label.contains('total') &&
+                (label.contains('paid') ||
+                    label.contains('due') ||
+                    label.contains('amount') ||
+                    label.contains('payable') ||
+                    label.contains('final') ||
+                    label.contains('grand') ||
+                    label.contains('net') ||
+                    label.contains('take home'))) ||
+            label.contains('amount due') ||
+            label.contains('total due') ||
+            label.contains('total payable') ||
+            label.contains('total to pay') ||
+            label.contains('grand total') ||
+            label.contains('final total') ||
+            label.contains('net total') ||
+            label.contains('take home');
+
+        if (isTotalLabel) {
+          // Use the explicit total if it's close to our calculated total (within 10%)
+          // or if calculated total seems wrong, use explicit total
+          final diff = (amount - total).abs();
+          if (diff / total < 0.10 || total < amount * 0.5) {
+            return {
+              'cost': amount,
+              'currency': currency,
+            };
+          }
+        }
+      }
+
+      // Return calculated total for this currency
+      return {
+        'cost': total,
+        'currency': currency,
+      };
+    }
+
+    return null;
+  }
+
+  int _getAmountPriority(String match, String lowerText,
+      [bool hasCurrencySymbol = false, bool hasCurrencyCode = false]) {
     int priority = 0;
     final lowerMatch = match.toLowerCase();
 
-    // Higher priority for subscription-related context
+    // CRITICAL: Highest priority for amounts with currency symbols/codes
+    // This ensures we prefer $4,000 over 2025 or 12345678
+    if (hasCurrencySymbol) {
+      priority += 50; // Massive boost for currency symbols
+    }
+    if (hasCurrencyCode) {
+      priority += 45; // Large boost for currency codes
+    }
+
+    // Highest priority for explicit total labels
+    if (lowerMatch.contains('total paid') || lowerText.contains('total paid'))
+      priority += 30;
+    if (lowerMatch.contains('total amount') ||
+        lowerText.contains('total amount')) priority += 30;
+    if (lowerMatch.contains('take home') || lowerText.contains('take home'))
+      priority += 30; // Added "take home" as high priority
+    if (lowerMatch.contains('total due') || lowerText.contains('total due'))
+      priority += 30;
+    if (lowerMatch.contains('amount due') || lowerText.contains('amount due'))
+      priority += 29;
+    if (lowerMatch.contains('grand total') || lowerText.contains('grand total'))
+      priority += 30;
+    if (lowerMatch.contains('final total') || lowerText.contains('final total'))
+      priority += 30;
+    if (lowerMatch.contains('net total') || lowerText.contains('net total'))
+      priority += 29;
+    if (lowerMatch.contains('total payable') ||
+        lowerText.contains('total payable')) priority += 30;
+    if (lowerMatch.contains('total to pay') ||
+        lowerText.contains('total to pay')) priority += 28;
+    if (lowerMatch.contains('to pay') || lowerText.contains('to pay'))
+      priority += 18;
+
+    // High priority for subscription-related context
     if (lowerMatch.contains('total') || lowerText.contains('total'))
       priority += 10;
     if (lowerMatch.contains('amount') || lowerText.contains('amount'))
@@ -780,25 +1240,243 @@ class ReceiptOcrService {
       priority += 6;
     if (lowerMatch.contains('payment') || lowerText.contains('payment'))
       priority += 5;
+    if (lowerMatch.contains('balance') || lowerText.contains('balance'))
+      priority += 7;
 
-    // Lower priority for subtotals and taxes
+    // Lower priority for subtotals, taxes, and discounts (these are components, not totals)
     if (lowerMatch.contains('subtotal') || lowerText.contains('subtotal'))
-      priority -= 5;
-    if (lowerMatch.contains('tax') || lowerText.contains('tax')) priority -= 3;
+      priority -= 15; // Heavily penalize subtotals
+    if (lowerMatch.contains('tax') || lowerText.contains('tax')) priority -= 12;
+    if (lowerMatch.contains('vat') || lowerText.contains('vat')) priority -= 12;
+    if (lowerMatch.contains('gst') || lowerText.contains('gst')) priority -= 12;
+    if (lowerMatch.contains('discount') || lowerText.contains('discount'))
+      priority -= 15; // Heavily penalize discounts
+    if (lowerMatch.contains('deduction') || lowerText.contains('deduction'))
+      priority -= 15;
+
+    // HEAVILY penalize amounts that look like dates, years, or IDs
+    // Check if the match contains date-like patterns
+    if (RegExp(r'\b(19|20)\d{2}\b|^\d{1,2}[/-]\d{1,2}[/-]\d{2,4}',
+            caseSensitive: false)
+        .hasMatch(match)) {
+      priority -= 100; // Heavily penalize dates/years
+    }
+
+    // Penalize very long sequences without currency (likely IDs)
+    if (!hasCurrencySymbol &&
+        !hasCurrencyCode &&
+        match.replaceAll(RegExp(r'[^\d]'), '').length > 8) {
+      priority -= 50; // Heavily penalize long sequences without currency
+    }
 
     return priority;
   }
 
-  String _detectCurrencyFromContext(String match, String text) {
-    // Check for currency symbols
-    if (match.contains('\$') || text.contains('\$')) return 'USD';
-    if (match.contains('€') || text.contains('€')) return 'EUR';
-    if (match.contains('£') || text.contains('£')) return 'GBP';
-    if (match.contains('₹') || text.contains('₹')) return 'INR';
-    if (match.contains('¥') || text.contains('¥')) return 'JPY';
-    if (match.contains('¢') || text.contains('¢')) return 'GHS';
+  /// Check if text is a job application (to exclude false positives)
+  bool _isJobApplication(String text) {
+    final lowerText = text.toLowerCase();
 
-    // Check for currency codes in text
+    final jobApplicationKeywords = [
+      'job application',
+      'application for',
+      'applying for',
+      'position',
+      'role',
+      'job opportunity',
+      'career opportunity',
+      'we are hiring',
+      'join our team',
+      'open position',
+      'job opening',
+      'vacancy',
+      'recruitment',
+      'recruiting',
+      'candidate',
+      'resume',
+      'cv',
+      'cover letter',
+      'interview',
+      'salary',
+      'compensation',
+      'benefits package',
+      'employment',
+      'full-time',
+      'part-time',
+      'remote position',
+      'work from home',
+      'job posting',
+      'job listing',
+      'apply now',
+      'submit application',
+      'application deadline',
+      'hiring manager',
+      'hr',
+      'human resources',
+      'talent acquisition',
+      'years of experience',
+      'required skills',
+      'qualifications',
+      'job description',
+      'job requirements',
+    ];
+
+    // Check for multiple job-related keywords (more reliable)
+    int jobKeywordCount = 0;
+    for (final keyword in jobApplicationKeywords) {
+      if (lowerText.contains(keyword)) {
+        jobKeywordCount++;
+        if (jobKeywordCount >= 2) {
+          return true;
+        }
+      }
+    }
+
+    // Also check for salary/compensation patterns that are too high for subscriptions
+    final salaryPatterns = [
+      RegExp(r'\$\s*[\d,]+(?:k|m|thousand|million)', caseSensitive: false),
+      RegExp(
+          r'(?:salary|compensation|pay)\s*:?\s*\$?\s*[\d,]+(?:k|m|thousand|million)',
+          caseSensitive: false),
+      RegExp(r'[\d,]+(?:k|m|thousand|million)\s*(?:per\s+year|annually|yearly)',
+          caseSensitive: false),
+    ];
+
+    // If salary pattern found AND job keywords present, it's a job application
+    if (jobKeywordCount >= 1 &&
+        salaryPatterns.any((p) => p.hasMatch(lowerText))) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /// Check for other non-subscription texts (spam, newsletters, etc.)
+  bool _isNonSubscriptionText(String text) {
+    final lowerText = text.toLowerCase();
+
+    final nonSubscriptionKeywords = [
+      'unsubscribe',
+      'newsletter',
+      'promotional',
+      'marketing',
+      'advertisement',
+      'spam',
+      'verify your email',
+      'confirm your email',
+      'email verification',
+      'account verification',
+      'password reset',
+      'forgot password',
+      'security alert',
+      'suspicious activity',
+      'login attempt',
+      'two-factor',
+      '2fa',
+      'verification code',
+      'otp',
+      'one-time password',
+    ];
+
+    // If multiple non-subscription keywords found, exclude
+    int nonSubCount = 0;
+    for (final keyword in nonSubscriptionKeywords) {
+      if (lowerText.contains(keyword)) {
+        nonSubCount++;
+        if (nonSubCount >= 2) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
+  /// Normalize currency symbols and codes to standard codes
+  String? _normalizeCurrency(String currencyStr) {
+    final normalized = currencyStr.trim().toUpperCase();
+
+    // Currency symbol mapping
+    final symbolMap = {
+      '\$': 'USD',
+      '€': 'EUR',
+      '£': 'GBP',
+      '¥': 'JPY',
+      '₹': 'INR',
+      '¢': 'USD', // Cent symbol, assume USD
+      '₵': 'GHS', // Ghana Cedi
+    };
+
+    if (symbolMap.containsKey(normalized)) {
+      return symbolMap[normalized];
+    }
+
+    // Currency code mapping
+    final codeMap = {
+      'USD': 'USD',
+      'EUR': 'EUR',
+      'GBP': 'GBP',
+      'INR': 'INR',
+      'GHS': 'GHS',
+      'NGN': 'NGN',
+      'ZAR': 'ZAR',
+      'KES': 'KES',
+      'UGX': 'UGX',
+      'TZS': 'TZS',
+      'DOLLAR': 'USD',
+      'DOLLARS': 'USD',
+      'EURO': 'EUR',
+      'EUROS': 'EUR',
+      'POUND': 'GBP',
+      'POUNDS': 'GBP',
+      'POUND STERLING': 'GBP',
+      'CEDIS': 'GHS',
+      'CEDI': 'GHS',
+    };
+
+    return codeMap[normalized] ?? normalized;
+  }
+
+  String _detectCurrencyFromContext(String match, String text) {
+    // Check for currency symbols (enhanced detection)
+    // Check match first (more specific), then text (broader context)
+    final checkText = match.isNotEmpty ? match : text;
+
+    // Euro (€) - check various representations
+    if (checkText.contains('€') ||
+        checkText.contains('EUR') ||
+        RegExp(r'\bEUR\b', caseSensitive: false).hasMatch(text)) return 'EUR';
+
+    // Pound (£) - check various representations
+    if (checkText.contains('£') ||
+        checkText.contains('GBP') ||
+        RegExp(r'\bGBP\b', caseSensitive: false).hasMatch(text)) return 'GBP';
+
+    // Dollar ($) - USD
+    if (checkText.contains('\$') ||
+        checkText.contains('USD') ||
+        RegExp(r'\bUSD\b', caseSensitive: false).hasMatch(text)) return 'USD';
+
+    // Indian Rupee (₹)
+    if (checkText.contains('₹') ||
+        checkText.contains('INR') ||
+        RegExp(r'\bINR\b', caseSensitive: false).hasMatch(text)) return 'INR';
+
+    // Japanese Yen (¥)
+    if (checkText.contains('¥') ||
+        checkText.contains('JPY') ||
+        RegExp(r'\bJPY\b', caseSensitive: false).hasMatch(text)) return 'JPY';
+
+    // Ghanaian Cedi (₵)
+    if (checkText.contains('₵') ||
+        checkText.contains('GHS') ||
+        RegExp(r'\bGHS\b', caseSensitive: false).hasMatch(text)) return 'GHS';
+
+    // Nigerian Naira (₦)
+    if (checkText.contains('₦') ||
+        checkText.contains('NGN') ||
+        RegExp(r'\bNGN\b', caseSensitive: false).hasMatch(text)) return 'NGN';
+
+    // Check for currency codes (expanded list with word boundaries)
     final currencyCodes = [
       'USD',
       'EUR',
@@ -828,10 +1506,63 @@ class ReceiptOcrService {
       'HUF',
       'RON',
       'BGN',
-      'HRK'
+      'HRK',
+      'BRL',
+      'MXN',
+      'ARS',
+      'CLP',
+      'COP',
+      'PEN',
+      'UYU',
+      'VES',
+      'TRY',
+      'RUB',
+      'ILS',
+      'AED',
+      'SAR',
+      'QAR',
+      'KWD',
+      'BHD',
+      'OMR',
+      'JOD',
+      'EGP',
+      'MAD',
+      'TND',
+      'DZD',
+      'LYD',
+      'SDG',
+      'DJF',
+      'SOS',
+      'ERN',
+      'SSP',
+      'AOA',
+      'ZMW',
+      'BWP',
+      'SZL',
+      'LSL',
+      'MZN',
+      'MGA',
+      'SCR',
+      'MUR',
+      'KMF',
+      'CDF',
+      'BIF',
+      'XOF',
+      'XAF',
+      'THB',
+      'MYR',
+      'IDR',
+      'PHP',
+      'VND',
+      'KRW',
+      'TWD',
     ];
+
+    // Check for currency codes with word boundaries to avoid false matches
     for (final code in currencyCodes) {
-      if (text.contains(code)) return code;
+      if (RegExp('\\b$code\\b', caseSensitive: false).hasMatch(text)) {
+        return code;
+      }
     }
 
     return 'USD'; // Default
@@ -964,15 +1695,36 @@ class ReceiptOcrService {
   }
 
   String _extractCurrency(String text, String lowerText) {
-    // Check for currency symbols first
-    if (text.contains('\$')) return 'USD';
-    if (text.contains('€')) return 'EUR';
-    if (text.contains('£')) return 'GBP';
-    if (text.contains('₹')) return 'INR';
-    if (text.contains('¥')) return 'JPY';
-    if (text.contains('¢')) return 'GHS';
+    // Check for currency symbols first (enhanced detection)
+    // Euro (€)
+    if (text.contains('€') ||
+        RegExp(r'\bEUR\b', caseSensitive: false).hasMatch(text)) return 'EUR';
 
-    // Check for currency codes
+    // Pound (£)
+    if (text.contains('£') ||
+        RegExp(r'\bGBP\b', caseSensitive: false).hasMatch(text)) return 'GBP';
+
+    // Dollar ($)
+    if (text.contains('\$') ||
+        RegExp(r'\bUSD\b', caseSensitive: false).hasMatch(text)) return 'USD';
+
+    // Indian Rupee (₹)
+    if (text.contains('₹') ||
+        RegExp(r'\bINR\b', caseSensitive: false).hasMatch(text)) return 'INR';
+
+    // Japanese Yen (¥)
+    if (text.contains('¥') ||
+        RegExp(r'\bJPY\b', caseSensitive: false).hasMatch(text)) return 'JPY';
+
+    // Ghanaian Cedi (₵)
+    if (text.contains('₵') ||
+        RegExp(r'\bGHS\b', caseSensitive: false).hasMatch(text)) return 'GHS';
+
+    // Nigerian Naira (₦)
+    if (text.contains('₦') ||
+        RegExp(r'\bNGN\b', caseSensitive: false).hasMatch(text)) return 'NGN';
+
+    // Check for currency codes (expanded list)
     final currencyCodes = [
       'USD',
       'EUR',
@@ -1002,54 +1754,758 @@ class ReceiptOcrService {
       'HUF',
       'RON',
       'BGN',
-      'HRK'
+      'HRK',
+      'BRL',
+      'MXN',
+      'ARS',
+      'CLP',
+      'COP',
+      'PEN',
+      'UYU',
+      'VES',
+      'TRY',
+      'RUB',
+      'ILS',
+      'AED',
+      'SAR',
+      'QAR',
+      'KWD',
+      'BHD',
+      'OMR',
+      'JOD',
+      'EGP',
+      'MAD',
+      'TND',
+      'DZD',
+      'LYD',
+      'SDG',
+      'DJF',
+      'SOS',
+      'ERN',
+      'SSP',
+      'AOA',
+      'ZMW',
+      'BWP',
+      'SZL',
+      'LSL',
+      'MZN',
+      'MGA',
+      'SCR',
+      'MUR',
+      'KMF',
+      'CDF',
+      'BIF',
+      'XOF',
+      'XAF',
+      'THB',
+      'MYR',
+      'IDR',
+      'PHP',
+      'VND',
+      'KRW',
+      'TWD',
     ];
+
+    // Check for currency codes with word boundaries to avoid false matches
     for (final code in currencyCodes) {
-      if (text.contains(code)) return code;
+      if (RegExp(r'\b$code\b', caseSensitive: false).hasMatch(text)) {
+        return code;
+      }
     }
 
     return 'USD'; // Default
   }
 
   BillingCycle _extractBillingCycle(String lowerText) {
-    if (lowerText.contains('yearly') ||
-        lowerText.contains('annual') ||
-        lowerText.contains('year')) {
-      return BillingCycle.yearly;
-    } else if (lowerText.contains('quarterly') ||
-        lowerText.contains('quarter')) {
-      return BillingCycle.quarterly;
-    } else if (lowerText.contains('weekly') || lowerText.contains('week')) {
-      return BillingCycle.weekly;
-    } else {
-      return BillingCycle.monthly; // Default
+    // Use regex patterns for more accurate detection (same as email scanner)
+
+    // Yearly/Annual patterns (12 months, per year, annually, etc.)
+    final yearlyPatterns = [
+      RegExp(
+          r'\b(annual|annually|yearly|per\s+year|every\s+year|12\s+months?|yearly\s+subscription|annual\s+plan)\b',
+          caseSensitive: false),
+      RegExp(r'\b(\d+)\s*(?:year|yr|years?)\b', caseSensitive: false),
+      RegExp(
+          r'\b(?:billed|charged|renewed?)\s+(?:annually|yearly|per\s+year)\b',
+          caseSensitive: false),
+    ];
+
+    // Half-yearly/Semi-annual patterns (6 months, bi-annual, semi-annual, etc.)
+    final halfYearlyPatterns = [
+      RegExp(
+          r'\b(semi-?annual|bi-?annual|half-?yearly|half-?year|6\s+months?|every\s+6\s+months?)\b',
+          caseSensitive: false),
+      RegExp(
+          r'\b(?:billed|charged|renewed?)\s+(?:semi-?annually|bi-?annually|every\s+6\s+months?)\b',
+          caseSensitive: false),
+    ];
+
+    // Quarterly patterns (3 months, per quarter, etc.)
+    final quarterlyPatterns = [
+      RegExp(
+          r'\b(quarterly|per\s+quarter|every\s+quarter|3\s+months?|every\s+3\s+months?|quarterly\s+subscription)\b',
+          caseSensitive: false),
+      RegExp(r'\b(?:billed|charged|renewed?)\s+(?:quarterly|per\s+quarter)\b',
+          caseSensitive: false),
+    ];
+
+    // Monthly patterns (per month, monthly, 30 days, etc.)
+    final monthlyPatterns = [
+      RegExp(
+          r'\b(monthly|per\s+month|every\s+month|monthly\s+subscription|monthly\s+plan|30\s+days?)\b',
+          caseSensitive: false),
+      RegExp(r'\b(?:billed|charged|renewed?)\s+(?:monthly|per\s+month)\b',
+          caseSensitive: false),
+      RegExp(r'\b(\d+)\s*(?:month|mo|months?)\b',
+          caseSensitive: false), // e.g., "1 month", "2 months"
+    ];
+
+    // Weekly patterns (per week, weekly, 7 days, etc.)
+    final weeklyPatterns = [
+      RegExp(
+          r'\b(weekly|per\s+week|every\s+week|weekly\s+subscription|7\s+days?)\b',
+          caseSensitive: false),
+      RegExp(r'\b(?:billed|charged|renewed?)\s+(?:weekly|per\s+week)\b',
+          caseSensitive: false),
+      RegExp(r'\b(\d+)\s*(?:week|wk|weeks?)\b',
+          caseSensitive: false), // e.g., "1 week", "2 weeks"
+    ];
+
+    // Check patterns in order of specificity (yearly -> half-yearly -> quarterly -> monthly -> weekly)
+
+    // Check for yearly
+    for (final pattern in yearlyPatterns) {
+      if (pattern.hasMatch(lowerText)) {
+        final match = pattern.firstMatch(lowerText);
+        if (match?.groupCount == 1 && match?.group(1) != null) {
+          final numStr = match!.group(1);
+          if (numStr != null) {
+            final num = int.tryParse(numStr);
+            if (num != null && num == 1) {
+              return BillingCycle.yearly;
+            }
+          }
+        } else {
+          return BillingCycle.yearly;
+        }
+      }
     }
+
+    // Check for half-yearly (6 months, semi-annual, bi-annual)
+    for (final pattern in halfYearlyPatterns) {
+      if (pattern.hasMatch(lowerText)) {
+        return BillingCycle.halfYearly;
+      }
+    }
+
+    // Check for quarterly
+    for (final pattern in quarterlyPatterns) {
+      if (pattern.hasMatch(lowerText)) {
+        return BillingCycle.quarterly;
+      }
+    }
+
+    // Check for monthly
+    for (final pattern in monthlyPatterns) {
+      if (pattern.hasMatch(lowerText)) {
+        final match = pattern.firstMatch(lowerText);
+        if (match?.groupCount == 1 && match?.group(1) != null) {
+          final numStr = match!.group(1);
+          if (numStr != null) {
+            final num = int.tryParse(numStr);
+            if (num != null && num == 1) {
+              return BillingCycle.monthly;
+            } else if (num == 2) {
+              return BillingCycle.monthly;
+            } else if (num == 3) {
+              return BillingCycle.quarterly;
+            } else if (num == 6) {
+              return BillingCycle.halfYearly;
+            } else if (num == 12) {
+              return BillingCycle.yearly;
+            }
+          }
+        } else {
+          return BillingCycle.monthly;
+        }
+      }
+    }
+
+    // Check for weekly
+    for (final pattern in weeklyPatterns) {
+      if (pattern.hasMatch(lowerText)) {
+        final match = pattern.firstMatch(lowerText);
+        if (match?.groupCount == 1 && match?.group(1) != null) {
+          final numStr = match!.group(1);
+          if (numStr != null) {
+            final num = int.tryParse(numStr);
+            if (num != null && num == 1) {
+              return BillingCycle.weekly;
+            }
+          }
+        } else {
+          return BillingCycle.weekly;
+        }
+      }
+    }
+
+    // Fallback: check for simple keywords
+    if (lowerText.contains('year') || lowerText.contains('annual')) {
+      return BillingCycle.yearly;
+    } else if (lowerText.contains('quarter')) {
+      return BillingCycle.quarterly;
+    } else if (lowerText.contains('week')) {
+      return BillingCycle.weekly;
+    }
+
+    // Default to monthly
+    return BillingCycle.monthly;
   }
 
-  SubscriptionCategory _inferCategory(String serviceName) {
-    final name = serviceName.toLowerCase();
-    if (name.contains('netflix') ||
-        name.contains('spotify') ||
-        name.contains('disney') ||
-        name.contains('hulu') ||
-        name.contains('hbo') ||
-        name.contains('prime')) {
-      return SubscriptionCategory.entertainment;
-    } else if (name.contains('adobe') ||
-        name.contains('microsoft') ||
-        name.contains('office') ||
-        name.contains('notion') ||
-        name.contains('figma') ||
-        name.contains('canva')) {
-      return SubscriptionCategory.productivity;
-    } else if (name.contains('aws') ||
-        name.contains('azure') ||
-        name.contains('github') ||
-        name.contains('dropbox')) {
-      return SubscriptionCategory.productivity;
-    } else {
+  /// Comprehensive category detection (matching email scanner)
+  SubscriptionCategory _inferCategory(String serviceName, [String? fullText]) {
+    final text = fullText != null
+        ? '${serviceName.toLowerCase()} ${fullText.toLowerCase()}'
+        : serviceName.toLowerCase();
+
+    // Category keyword maps with weighted scoring
+    final categoryScores = <SubscriptionCategory, int>{};
+
+    // Streaming & Video
+    final streamingKeywords = [
+      'netflix',
+      'spotify',
+      'disney',
+      'disney+',
+      'disney plus',
+      'hulu',
+      'hbo',
+      'hbo max',
+      'prime video',
+      'amazon prime',
+      'youtube premium',
+      'youtube tv',
+      'apple tv',
+      'paramount',
+      'peacock',
+      'showtime',
+      'starz',
+      'crunchyroll',
+      'fubo',
+      'sling',
+      'directv',
+      'streaming',
+      'stream',
+      'watch',
+      'movie',
+      'movies',
+      'tv show',
+      'series',
+      'episode',
+      'season',
+      'premium video',
+      'video subscription',
+      'entertainment subscription'
+    ];
+
+    // Music
+    final musicKeywords = [
+      'spotify',
+      'apple music',
+      'youtube music',
+      'amazon music',
+      'tidal',
+      'pandora',
+      'soundcloud',
+      'deezer',
+      'music',
+      'song',
+      'songs',
+      'album',
+      'playlist',
+      'artist',
+      'musician',
+      'audio streaming',
+      'music streaming'
+    ];
+
+    // Productivity & Software
+    final productivityKeywords = [
+      'adobe',
+      'microsoft',
+      'office',
+      'office 365',
+      'microsoft 365',
+      'notion',
+      'figma',
+      'canva',
+      'slack',
+      'trello',
+      'asana',
+      'monday',
+      'clickup',
+      'todoist',
+      'evernote',
+      'onenote',
+      'roam',
+      'obsidian',
+      'productivity',
+      'task management',
+      'project management',
+      'note taking',
+      'collaboration tool',
+      'work management'
+    ];
+
+    // Cloud Storage
+    final cloudStorageKeywords = [
+      'dropbox',
+      'google drive',
+      'onedrive',
+      'icloud',
+      'box',
+      'pcloud',
+      'mega',
+      'sync',
+      'backblaze',
+      'carbonite',
+      'cloud storage',
+      'file storage',
+      'file backup',
+      'online storage',
+      'cloud backup',
+      'data storage'
+    ];
+
+    // Software Development
+    final devKeywords = [
+      'github',
+      'gitlab',
+      'bitbucket',
+      'aws',
+      'azure',
+      'google cloud',
+      'gcp',
+      'heroku',
+      'vercel',
+      'netlify',
+      'digitalocean',
+      'linode',
+      'vultr',
+      'code',
+      'coding',
+      'developer',
+      'development',
+      'programming',
+      'api',
+      'server',
+      'hosting',
+      'deployment',
+      'ci/cd',
+      'devops',
+      'cloud computing',
+      'infrastructure',
+      'software development',
+      'coding tool'
+    ];
+
+    // Design
+    final designKeywords = [
+      'adobe creative',
+      'photoshop',
+      'illustrator',
+      'indesign',
+      'premiere',
+      'after effects',
+      'figma',
+      'sketch',
+      'canva',
+      'affinity',
+      'design',
+      'graphic design',
+      'ui/ux',
+      'prototype',
+      'mockup',
+      'design tool',
+      'creative suite',
+      'video editing',
+      'photo editing'
+    ];
+
+    // Communication
+    final communicationKeywords = [
+      'zoom',
+      'teams',
+      'slack',
+      'discord',
+      'telegram',
+      'whatsapp business',
+      'skype',
+      'webex',
+      'gotomeeting',
+      'bluejeans',
+      'ringcentral',
+      'communication',
+      'messaging',
+      'video call',
+      'video conferencing',
+      'team chat',
+      'business communication',
+      'calling',
+      'voip'
+    ];
+
+    // Security
+    final securityKeywords = [
+      'nordvpn',
+      'expressvpn',
+      'surfshark',
+      'cyberghost',
+      'protonvpn',
+      'lastpass',
+      '1password',
+      'dashlane',
+      'bitwarden',
+      'keeper',
+      'norton',
+      'mcafee',
+      'kaspersky',
+      'avast',
+      'bitdefender',
+      'vpn',
+      'password manager',
+      'antivirus',
+      'security',
+      'cybersecurity',
+      'encryption',
+      'privacy',
+      'secure',
+      'protection',
+      'firewall'
+    ];
+
+    // Finance
+    final financeKeywords = [
+      'mint',
+      'ynab',
+      'quickbooks',
+      'freshbooks',
+      'xero',
+      'wave',
+      'moneydance',
+      'gnucash',
+      'turbotax',
+      'credit karma',
+      'paypal',
+      'stripe',
+      'square',
+      'accounting',
+      'bookkeeping',
+      'tax',
+      'invoice',
+      'expense',
+      'budget',
+      'financial',
+      'payment processing',
+      'billing software'
+    ];
+
+    // News & Media
+    final newsKeywords = [
+      'new york times',
+      'washington post',
+      'wall street journal',
+      'wsj',
+      'the guardian',
+      'economist',
+      'atlantic',
+      'new yorker',
+      'medium',
+      'substack',
+      'newsletter',
+      'news',
+      'magazine',
+      'journalism',
+      'article',
+      'publication',
+      'media subscription',
+      'news subscription'
+    ];
+
+    // Education
+    final educationKeywords = [
+      'coursera',
+      'udemy',
+      'skillshare',
+      'linkedin learning',
+      'pluralsight',
+      'masterclass',
+      'khan academy',
+      'udacity',
+      'codecademy',
+      'treehouse',
+      'education',
+      'learning',
+      'course',
+      'training',
+      'tutorial',
+      'class',
+      'online course',
+      'e-learning',
+      'educational',
+      'certification'
+    ];
+
+    // Health & Fitness
+    final healthKeywords = [
+      'myfitnesspal',
+      'strava',
+      'nike training',
+      'calm',
+      'headspace',
+      'noom',
+      'weight watchers',
+      'ww',
+      'fitbit premium',
+      'whoop',
+      'health',
+      'fitness',
+      'workout',
+      'exercise',
+      'meditation',
+      'wellness',
+      'nutrition',
+      'diet',
+      'mental health',
+      'therapy',
+      'counseling'
+    ];
+
+    // Gaming
+    final gamingKeywords = [
+      'xbox',
+      'playstation',
+      'nintendo',
+      'steam',
+      'epic games',
+      'ubisoft',
+      'ea play',
+      'game pass',
+      'nvidia geforce',
+      'twitch',
+      'gaming',
+      'game',
+      'games',
+      'gamer',
+      'console',
+      'pc gaming',
+      'online gaming'
+    ];
+
+    // Shopping
+    final shoppingKeywords = [
+      'amazon prime',
+      'costco',
+      'sam\'s club',
+      'walmart+',
+      'target',
+      'shopping',
+      'retail',
+      'membership',
+      'delivery',
+      'shipping',
+      'online shopping',
+      'retail subscription',
+      'membership fee'
+    ];
+
+    // Travel
+    final travelKeywords = [
+      'booking.com',
+      'expedia',
+      'airbnb',
+      'uber',
+      'lyft',
+      'turo',
+      'travel',
+      'hotel',
+      'flight',
+      'airline',
+      'car rental',
+      'trip',
+      'vacation',
+      'booking',
+      'reservation',
+      'travel subscription'
+    ];
+
+    // Food & Delivery
+    final foodKeywords = [
+      'doordash',
+      'ubereats',
+      'grubhub',
+      'instacart',
+      'hello fresh',
+      'blue apron',
+      'meal kit',
+      'food delivery',
+      'restaurant',
+      'dining',
+      'groceries',
+      'meal',
+      'recipe',
+      'cooking',
+      'food subscription'
+    ];
+
+    // Social Media
+    final socialKeywords = [
+      'linkedin premium',
+      'twitter blue',
+      'facebook',
+      'instagram',
+      'tiktok',
+      'pinterest',
+      'reddit premium',
+      'social media',
+      'social network',
+      'community',
+      'networking',
+      'social platform'
+    ];
+
+    // Telecom
+    final telecomKeywords = [
+      'verizon',
+      'at&t',
+      't-mobile',
+      'sprint',
+      'vodafone',
+      'orange',
+      'telecom',
+      'mobile',
+      'phone',
+      'cellular',
+      'data plan',
+      'phone plan',
+      'mobile plan',
+      'carrier',
+      'network',
+      'sim card',
+      'mobile subscription'
+    ];
+
+    // Mobile Money
+    final mobileMoneyKeywords = [
+      'mpesa',
+      'mtn mobile money',
+      'orange money',
+      'airtel money',
+      'mobile money',
+      'mobile payment',
+      'digital wallet',
+      'e-wallet',
+      'mobile banking',
+      'mobile transfer',
+      'cash transfer'
+    ];
+
+    // Business
+    final businessKeywords = [
+      'salesforce',
+      'hubspot',
+      'zendesk',
+      'intercom',
+      'mailchimp',
+      'sendgrid',
+      'constant contact',
+      'business',
+      'enterprise',
+      'saas',
+      'crm',
+      'customer relationship',
+      'business tool',
+      'enterprise software'
+    ];
+
+    // Marketing
+    final marketingKeywords = [
+      'mailchimp',
+      'sendgrid',
+      'constant contact',
+      'campaign monitor',
+      'convertkit',
+      'activecampaign',
+      'marketing',
+      'email marketing',
+      'campaign',
+      'newsletter',
+      'marketing automation',
+      'seo',
+      'analytics'
+    ];
+
+    // Utilities
+    final utilitiesKeywords = [
+      'electricity',
+      'water',
+      'gas',
+      'internet',
+      'wifi',
+      'broadband',
+      'utility',
+      'utilities',
+      'service charge',
+      'utility bill',
+      'service fee'
+    ];
+
+    // Scoring function
+    void scoreCategory(SubscriptionCategory category, List<String> keywords) {
+      int score = 0;
+      for (final keyword in keywords) {
+        if (text.contains(keyword)) {
+          score += 1;
+        }
+      }
+      if (score > 0) {
+        categoryScores[category] = (categoryScores[category] ?? 0) + score;
+      }
+    }
+
+    // Score all categories
+    scoreCategory(SubscriptionCategory.streaming, streamingKeywords);
+    scoreCategory(SubscriptionCategory.music, musicKeywords);
+    scoreCategory(SubscriptionCategory.productivity, productivityKeywords);
+    scoreCategory(SubscriptionCategory.cloudStorage, cloudStorageKeywords);
+    scoreCategory(SubscriptionCategory.softwareDevelopment, devKeywords);
+    scoreCategory(SubscriptionCategory.design, designKeywords);
+    scoreCategory(SubscriptionCategory.communication, communicationKeywords);
+    scoreCategory(SubscriptionCategory.security, securityKeywords);
+    scoreCategory(SubscriptionCategory.finance, financeKeywords);
+    scoreCategory(SubscriptionCategory.news, newsKeywords);
+    scoreCategory(SubscriptionCategory.education, educationKeywords);
+    scoreCategory(SubscriptionCategory.health, healthKeywords);
+    scoreCategory(SubscriptionCategory.gaming, gamingKeywords);
+    scoreCategory(SubscriptionCategory.shopping, shoppingKeywords);
+    scoreCategory(SubscriptionCategory.travel, travelKeywords);
+    scoreCategory(SubscriptionCategory.food, foodKeywords);
+    scoreCategory(SubscriptionCategory.socialMedia, socialKeywords);
+    scoreCategory(SubscriptionCategory.telecom, telecomKeywords);
+    scoreCategory(SubscriptionCategory.mobileMoney, mobileMoneyKeywords);
+    scoreCategory(SubscriptionCategory.business, businessKeywords);
+    scoreCategory(SubscriptionCategory.marketing, marketingKeywords);
+    scoreCategory(SubscriptionCategory.utilities, utilitiesKeywords);
+
+    // Return category with highest score
+    if (categoryScores.isEmpty) {
       return SubscriptionCategory.other;
     }
+
+    final sortedCategories = categoryScores.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+
+    return sortedCategories.first.key;
   }
 
   /// Intelligent payment method extraction with fuzzy matching and context analysis
