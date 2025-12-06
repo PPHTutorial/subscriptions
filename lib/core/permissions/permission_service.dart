@@ -65,10 +65,38 @@ class PermissionService {
   }
 
   /// Request storage permission (Android)
+  /// On Android 11+ (API 30+), file_picker uses scoped storage which doesn't require explicit permissions
+  /// On Android 10 and below, uses storage permission
+  /// Note: file_picker handles its own permissions on modern Android versions
   Future<bool> requestStoragePermission() async {
     if (!Platform.isAndroid) return true; // iOS doesn't need this
-    final status = await Permission.storage.request();
-    return status.isGranted;
+
+    try {
+      // Request storage permission (works for older Android versions)
+      final status = await Permission.storage.request();
+
+      // If storage permission is denied, try manageExternalStorage for Android 11+
+      if (!status.isGranted) {
+        try {
+          final manageStatus = await Permission.manageExternalStorage.request();
+          if (manageStatus.isGranted) {
+            return true;
+          }
+        } catch (e) {
+          // manageExternalStorage might not be available on all devices
+          // file_picker should still work with scoped storage
+        }
+      }
+
+      // Even if permission is denied, file_picker can still work with scoped storage
+      // on Android 11+, so we return true to allow the file picker to try
+      // The file_picker package handles its own permissions automatically
+      return true;
+    } catch (e) {
+      // If permission request fails, still allow file picker to try
+      // file_picker handles its own permissions on modern Android
+      return true;
+    }
   }
 
   /// Request photos permission

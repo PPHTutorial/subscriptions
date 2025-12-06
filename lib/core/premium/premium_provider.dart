@@ -7,16 +7,30 @@ final premiumServiceProvider = Provider<PremiumService>((ref) {
 });
 
 /// Provider for premium status
+/// Validates subscription status periodically to prevent overuse
 final premiumStatusProvider = StreamProvider<bool>((ref) async* {
   final service = ref.read(premiumServiceProvider);
 
-  // Initial check
+  // Ensure service is initialized
+  await service.initialize();
+
+  // Initial check with validation
   yield await service.isPremium();
 
-  // Periodically check (every 30 seconds)
+  // Periodically check subscription status
+  // Check every 5 minutes to catch expired subscriptions
   while (true) {
-    await Future.delayed(const Duration(seconds: 30));
-    yield await service.isPremium();
+    await Future.delayed(const Duration(minutes: 5));
+
+    // Validate with store every hour, otherwise just check local expiry
+    final isPremium = await service.isPremium();
+    yield isPremium;
+
+    // If premium expired, ensure restrictions are enforced immediately
+    if (!isPremium) {
+      // Force a refresh to ensure UI updates
+      ref.invalidateSelf();
+    }
   }
 });
 

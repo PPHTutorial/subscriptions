@@ -26,23 +26,51 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       color: const Color(0xFF6247EA),
     ),
     OnboardingPage(
-      title: 'Smart Reminders',
+      title: 'Track Everything',
       description:
-          'Get notified before your subscriptions renew. Set custom reminders so you\'re always in control.',
-      icon: Icons.notifications_active_rounded,
+          'Add subscriptions manually or let the app detect them automatically. Organize by category, set billing cycles, and track renewal dates.',
+      icon: Icons.dashboard_rounded,
       color: const Color(0xFF3AA9FF),
     ),
     OnboardingPage(
-      title: 'Automatic Detection',
+      title: 'Smart Reminders',
       description:
-          'Scan emails, SMS, and receipts to automatically add subscriptions. Save time with smart detection.',
-      icon: Icons.auto_awesome_rounded,
+          'Get notified before your subscriptions renew. Set custom reminders so you\'re always in control and never miss a payment.',
+      icon: Icons.notifications_active_rounded,
       color: const Color(0xFF25D9B5),
     ),
     OnboardingPage(
-      title: 'Analytics & Insights',
+      title: 'Email Scanning',
       description:
-          'See your spending patterns, detect waste, and get AI-powered suggestions to save money.',
+          'Connect your email (Gmail, Outlook, Yahoo, iCloud, ProtonMail, or custom) and automatically scan receipts to find subscriptions.',
+      icon: Icons.email_rounded,
+      color: const Color(0xFFFF6B6B),
+    ),
+    OnboardingPage(
+      title: 'SMS Scanning',
+      description:
+          'Scan SMS messages from banks and mobile money services to automatically detect subscription payments and renewals.',
+      icon: Icons.sms_rounded,
+      color: const Color(0xFF4ECDC4),
+    ),
+    OnboardingPage(
+      title: 'Receipt & Barcode',
+      description:
+          'Take a photo of receipts or scan barcodes to extract subscription details instantly. Works with invoices and payment confirmations.',
+      icon: Icons.qr_code_scanner_rounded,
+      color: const Color(0xFF95E1D3),
+    ),
+    OnboardingPage(
+      title: 'Cloud Sync',
+      description:
+          'Sync your subscriptions across all devices with Firebase. Your data is safe, secure, and accessible anywhere.',
+      icon: Icons.cloud_sync_rounded,
+      color: const Color(0xFFF38181),
+    ),
+    OnboardingPage(
+      title: 'AI Insights & Analytics',
+      description:
+          'See your spending patterns, detect waste, get AI-powered suggestions, and discover similar subscriptions to save money.',
       icon: Icons.insights_rounded,
       color: const Color(0xFFFFB347),
     ),
@@ -59,10 +87,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
     try {
       // Request all permissions with proper error handling
-      final statuses = await _permissionService.requestAllPermissions();
-
-      // Log which permissions were granted/denied (for debugging)
-      // You can check statuses to see which permissions were granted
+      await _permissionService.requestAllPermissions();
 
       // Mark onboarding as completed regardless of permission results
       final prefs = await SharedPreferences.getInstance();
@@ -155,38 +180,78 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
             // Next/Get Started button
             Padding(
-              padding: EdgeInsets.all(ResponsiveHelper.spacing(20)),
-              child: SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: _isRequestingPermissions ? null : _nextPage,
-                  style: ElevatedButton.styleFrom(
-                    padding: EdgeInsets.symmetric(
-                      vertical: ResponsiveHelper.spacing(16),
+              padding: EdgeInsets.symmetric(
+                horizontal: ResponsiveHelper.spacing(20),
+                vertical: ResponsiveHelper.spacing(16),
+              ),
+              child: Row(
+                children: [
+                  // Back button (show on pages after first)
+                  if (_currentPage > 0)
+                    TextButton.icon(
+                      onPressed: _isRequestingPermissions
+                          ? null
+                          : () {
+                              _pageController.previousPage(
+                                duration: const Duration(milliseconds: 300),
+                                curve: Curves.easeInOut,
+                              );
+                            },
+                      icon: const Icon(Icons.arrow_back),
+                      label: const Text('Back'),
+                      style: TextButton.styleFrom(
+                        padding: EdgeInsets.symmetric(
+                          horizontal: ResponsiveHelper.spacing(16),
+                          vertical: ResponsiveHelper.spacing(12),
+                        ),
+                      ),
                     ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(
-                        ResponsiveHelper.spacing(12),
+                  if (_currentPage > 0)
+                    SizedBox(width: ResponsiveHelper.spacing(8)),
+                  // Next/Get Started button
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: _isRequestingPermissions ? null : _nextPage,
+                      style: ElevatedButton.styleFrom(
+                        padding: EdgeInsets.symmetric(
+                          vertical: ResponsiveHelper.spacing(16),
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(
+                            ResponsiveHelper.spacing(12),
+                          ),
+                        ),
+                        elevation: 2,
+                      ),
+                      icon: _isRequestingPermissions
+                          ? SizedBox(
+                              height: ResponsiveHelper.spacing(20),
+                              width: ResponsiveHelper.spacing(20),
+                              child: const CircularProgressIndicator(
+                                strokeWidth: 2,
+                                valueColor:
+                                    AlwaysStoppedAnimation<Color>(Colors.white),
+                              ),
+                            )
+                          : Icon(
+                              _currentPage == _pages.length - 1
+                                  ? Icons.check_circle_outline
+                                  : Icons.arrow_forward,
+                            ),
+                      label: Text(
+                        _isRequestingPermissions
+                            ? 'Setting up...'
+                            : _currentPage == _pages.length - 1
+                                ? 'Get Started'
+                                : 'Next',
+                        style: TextStyle(
+                          fontSize: ResponsiveHelper.fontSize(16),
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
                   ),
-                  child: _isRequestingPermissions
-                      ? SizedBox(
-                          height: ResponsiveHelper.spacing(20),
-                          width: ResponsiveHelper.spacing(20),
-                          child: const CircularProgressIndicator(
-                            strokeWidth: 2,
-                            valueColor:
-                                AlwaysStoppedAnimation<Color>(Colors.white),
-                          ),
-                        )
-                      : Text(
-                          _currentPage == _pages.length - 1
-                              ? 'Get Started'
-                              : 'Next',
-                          style: const TextStyle(fontSize: 16),
-                        ),
-                ),
+                ],
               ),
             ),
           ],
@@ -261,14 +326,24 @@ class _PageIndicator extends StatelessWidget {
   Widget build(BuildContext context) {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
-      margin: EdgeInsets.symmetric(horizontal: ResponsiveHelper.spacing(4)),
-      width: isActive ? ResponsiveHelper.width(24) : ResponsiveHelper.width(8),
+      curve: Curves.easeInOut,
+      margin: EdgeInsets.symmetric(horizontal: ResponsiveHelper.spacing(3)),
+      width: isActive ? ResponsiveHelper.width(32) : ResponsiveHelper.width(8),
       height: ResponsiveHelper.height(8),
       decoration: BoxDecoration(
         color: isActive
             ? Theme.of(context).colorScheme.primary
             : Theme.of(context).colorScheme.primary.withOpacity(0.3),
         borderRadius: BorderRadius.circular(ResponsiveHelper.spacing(4)),
+        boxShadow: isActive
+            ? [
+                BoxShadow(
+                  color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
+                  blurRadius: 8,
+                  spreadRadius: 1,
+                ),
+              ]
+            : null,
       ),
     );
   }

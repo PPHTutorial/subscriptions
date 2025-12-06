@@ -130,36 +130,55 @@ class _ReceiptUploadScreenState extends ConsumerState<ReceiptUploadScreen> {
     await _permissionService.requestAllPermissions();
 
     // Request storage permission for documents
-    final hasStorage = await _permissionService.requestStoragePermission();
-    if (!hasStorage && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Storage permission is required to select documents'),
-        ),
-      );
-      return;
-    }
+    // Note: On Android 11+, file_picker uses scoped storage and may not need explicit permission
+    // But we still request it for compatibility with older Android versions
+    await _permissionService.requestStoragePermission();
 
     try {
       // Use pickDocumentFile for PDF/DOCX files
+      // file_picker handles its own permissions on modern Android versions
       final file = await _ocrService.pickDocumentFile();
+
+      if (file == null) {
+        // User cancelled or no file selected
+        return;
+      }
+
       setState(() {
         _selectedFile = file;
         // For documents, we might not have an image to display
-        _selectedImage =
-            file?.type == ReceiptFileType.image ? file?.file : null;
+        _selectedImage = file.type == ReceiptFileType.image ? file.file : null;
         _result = null;
       });
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Error picking document: $e',
+        String errorMessage = 'Error picking document: $e';
+
+        // Provide more helpful error messages
+        if (e.toString().contains('permission') ||
+            e.toString().contains('Permission')) {
+          errorMessage =
+              'Storage permission is required to select documents. Please grant permission in app settings.';
+
+          // Optionally show a button to open settings
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(errorMessage),
+              duration: const Duration(seconds: 5),
+              action: SnackBarAction(
+                label: 'Settings',
+                onPressed: () => _permissionService.openAppSettings(),
+              ),
             ),
-            duration: const Duration(seconds: 4),
-          ),
-        );
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(errorMessage),
+              duration: const Duration(seconds: 4),
+            ),
+          );
+        }
       }
     }
   }

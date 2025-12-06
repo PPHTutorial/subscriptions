@@ -128,12 +128,12 @@ class ImapEmailScannerService {
       if (folder == 'INBOX') {
         selectedMailbox = await _imapClient!.selectInbox();
       } else {
-        final mailbox = Mailbox(
-          encodedName: folder,
-          encodedPath: folder,
+      final mailbox = Mailbox(
+        encodedName: folder,
+        encodedPath: folder,
           flags: [],
-          pathSeparator: '/',
-        );
+        pathSeparator: '/',
+      );
         selectedMailbox = await _imapClient!.selectMailbox(mailbox);
       }
       final messageCount = selectedMailbox.messagesExists;
@@ -148,16 +148,16 @@ class ImapEmailScannerService {
       final end = messageCount;
 
       try {
-        final fetchResult = await _imapClient!.fetchMessages(
-          MessageSequence.fromRange(start, end),
+      final fetchResult = await _imapClient!.fetchMessages(
+        MessageSequence.fromRange(start, end),
           'BODY.PEEK[]',
-        );
+      );
 
         if (fetchResult.messages.isEmpty) {
           return [];
         }
 
-        final emails = <Map<String, dynamic>>[];
+      final emails = <Map<String, dynamic>>[];
         // Messages are in ascending order (oldest to newest)
         // Reverse to get newest first (descending order - from today to previous)
         final messages = fetchResult.messages.toList().reversed.toList();
@@ -173,11 +173,11 @@ class ImapEmailScannerService {
 
             // If since is provided, skip emails older than that
             if (since != null) {
-              if (messageDate == null || messageDate.isBefore(since)) {
+            if (messageDate == null || messageDate.isBefore(since)) {
                 debugPrint(
                     'Skipping email: date ${messageDate} is before ${since}');
-                continue;
-              }
+              continue;
+            }
             } else {
               // If no since date, only include emails from the last 60 days
               if (messageDate != null) {
@@ -209,7 +209,7 @@ class ImapEmailScannerService {
         debugPrint('Fetched ${emails.length} emails (from newest to oldest)');
 
         return emails;
-      } catch (e) {
+        } catch (e) {
         debugPrint('Error fetching messages with range: $e');
         // If range fetch fails, try fetching individual messages from the end
         try {
@@ -240,9 +240,9 @@ class ImapEmailScannerService {
               }
             } catch (e) {
               debugPrint('Error fetching message $seqNum: $e');
-              continue;
-            }
-          }
+          continue;
+        }
+      }
 
           return emails;
         } catch (e2) {
@@ -265,20 +265,20 @@ class ImapEmailScannerService {
         await fetchEmails(maxResults: maxResults, since: since, folder: folder);
     debugPrint('Fetched ${emails.length} emails for scanning');
 
-    final matches = <EmailSubscriptionMatch>[];
+      final matches = <EmailSubscriptionMatch>[];
 
     for (var i = 0; i < emails.length; i++) {
       final email = emails[i];
       debugPrint('Scanning email ${i + 1}/${emails.length}');
-      final match = _parseEmailForSubscription(email);
-      if (match != null) {
+        final match = _parseEmailForSubscription(email);
+        if (match != null) {
         debugPrint('Match found: ${match.serviceName}');
-        matches.add(match);
+          matches.add(match);
+        }
       }
-    }
 
     debugPrint('Scan complete: Found ${matches.length} subscription(s)');
-    return matches;
+      return matches;
   }
 
   Map<String, dynamic> _parseMessage(MimeMessage message) {
@@ -292,8 +292,8 @@ class ImapEmailScannerService {
 
       debugPrint('Parsed email: Subject="$subject", From="$from", Date=$date');
 
-      return {
-        'id': message.sequenceId?.toString() ?? message.uid?.toString() ?? '',
+    return {
+      'id': message.sequenceId?.toString() ?? message.uid?.toString() ?? '',
         'subject': subject,
         'from': from,
         'date': date,
@@ -316,8 +316,8 @@ class ImapEmailScannerService {
             .replaceAll(RegExp(r'\n{3,}'), '\n\n') // Max 2 consecutive newlines
             .replaceAll(RegExp(r'[ \t]+'), ' ') // Multiple spaces to single
             .trim();
-      }
-    } catch (e) {
+                  }
+                } catch (e) {
       // Ignore
     }
     return null;
@@ -329,8 +329,8 @@ class ImapEmailScannerService {
       final html = message.decodeTextHtmlPart();
       if (html != null && html.isNotEmpty) {
         return html;
-      }
-    } catch (e) {
+                  }
+                } catch (e) {
       // Ignore
     }
     return null;
@@ -788,7 +788,7 @@ class ImapEmailScannerService {
           }
         } else {
           // Fallback: try to parse first group as amount
-          final amountStr = match.group(1)?.replaceAll(',', '') ?? '';
+        final amountStr = match.group(1)?.replaceAll(',', '') ?? '';
           amount = double.tryParse(amountStr);
         }
 
@@ -926,11 +926,11 @@ class ImapEmailScannerService {
     final billingCycle = _extractBillingCycle(text);
     switch (billingCycle) {
       case BillingCycle.weekly:
-        return emailDate.add(const Duration(days: 7));
+      return emailDate.add(const Duration(days: 7));
       case BillingCycle.monthly:
         return emailDate.add(const Duration(days: 30));
       case BillingCycle.quarterly:
-        return emailDate.add(const Duration(days: 90));
+      return emailDate.add(const Duration(days: 90));
       case BillingCycle.halfYearly:
         return emailDate.add(const Duration(days: 180));
       case BillingCycle.yearly:
@@ -1012,7 +1012,7 @@ class ImapEmailScannerService {
             if (num != null && num == 1) {
               debugPrint(
                   'Detected billing cycle: Yearly (from pattern: ${pattern.pattern})');
-              return BillingCycle.yearly;
+      return BillingCycle.yearly;
             }
           }
         } else {
@@ -1037,7 +1037,7 @@ class ImapEmailScannerService {
       if (pattern.hasMatch(lowerText)) {
         debugPrint(
             'Detected billing cycle: Quarterly (from pattern: ${pattern.pattern})');
-        return BillingCycle.quarterly;
+      return BillingCycle.quarterly;
       }
     }
 
@@ -1071,10 +1071,10 @@ class ImapEmailScannerService {
               return BillingCycle.yearly;
             }
           }
-        } else {
+    } else {
           debugPrint(
               'Detected billing cycle: Monthly (from pattern: ${pattern.pattern})');
-          return BillingCycle.monthly;
+      return BillingCycle.monthly;
         }
       }
     }
@@ -1094,7 +1094,7 @@ class ImapEmailScannerService {
               return BillingCycle.weekly;
             }
           }
-        } else {
+    } else {
           debugPrint(
               'Detected billing cycle: Weekly (from pattern: ${pattern.pattern})');
           return BillingCycle.weekly;
@@ -1830,7 +1830,7 @@ class ImapEmailScannerService {
           'note': 'Use your Microsoft account password',
         };
       case EmailProvider.yahoo:
-        return {
+    return {
           'server': 'imap.mail.yahoo.com',
           'port': 993,
           'useSsl': true,

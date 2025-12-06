@@ -294,7 +294,7 @@ class SubscriptionDetailsScreen extends ConsumerWidget {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => AddSubscriptionSheet(
+      builder: (BuildContext context) => AddSubscriptionSheet(
         subscription: currentSub,
         onSubmit: (updated) async {
           try {

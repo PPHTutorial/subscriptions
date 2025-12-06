@@ -8,7 +8,9 @@ import 'core/ads/ad_navigation_helper.dart';
 import 'core/ads/app_open_ad_service.dart';
 import 'core/config/app_config.dart';
 import 'core/notifications/notification_service.dart';
+import 'core/premium/premium_service.dart';
 import 'core/responsive/responsive_helper.dart';
+import 'core/splash/splash_screen.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/theme_provider.dart';
 import 'features/onboarding/data/onboarding_repository.dart';
@@ -38,6 +40,10 @@ Future<void> main() async {
 
   final notificationService = LocalNotificationService();
   await notificationService.initialize();
+
+  // Initialize premium service and validate subscriptions
+  final premiumService = PremiumService();
+  await premiumService.initialize();
 
   // Initialize ads
   await AdService.initialize();
@@ -108,14 +114,12 @@ class _SubscriptionsAppState extends ConsumerState<SubscriptionsApp>
 
     if (_isLoading) {
       return MaterialApp(
-        home: Scaffold(
-          backgroundColor: Theme.of(context).colorScheme.surface,
-          body: Center(
-            child: CircularProgressIndicator(
-              color: AppTheme.build(themeState, context).colorScheme.primary,
-            ),
-          ),
-        ),
+        theme: AppTheme.build(themeState, context),
+        darkTheme: AppTheme.build(themeState, context),
+        themeMode: themeState.brightness == Brightness.dark
+            ? ThemeMode.dark
+            : ThemeMode.light,
+        home: const SplashScreen(),
       );
     }
 

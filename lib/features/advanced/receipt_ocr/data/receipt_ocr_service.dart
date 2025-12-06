@@ -97,12 +97,24 @@ class ReceiptOcrService {
 
   /// Extract text using Google ML Kit with layout preservation
   Future<String> _extractWithGoogleMLKit(File imageFile) async {
-    final inputImage = InputImage.fromFilePath(imageFile.path);
-    final RecognizedText recognizedText =
-        await _textRecognizer.processImage(inputImage);
+    try {
+      final inputImage = InputImage.fromFilePath(imageFile.path);
+      final RecognizedText recognizedText =
+          await _textRecognizer.processImage(inputImage);
 
-    // Extract text with layout preservation (similar to Google Lens)
-    return _formatTextWithLayout(recognizedText);
+      // Extract text with layout preservation (similar to Google Lens)
+      return _formatTextWithLayout(recognizedText);
+    } catch (e) {
+      // Handle missing native library (libbarhopper_v3.so removed for 16KB page size compatibility)
+      if (e.toString().contains('barhopper') ||
+          e.toString().contains('native') ||
+          e.toString().contains('library')) {
+        throw Exception(
+            'OCR is temporarily unavailable. The text recognition library is not compatible with this device. '
+            'Please manually enter subscription details or try again later.');
+      }
+      rethrow;
+    }
   }
 
   /// Format text preserving layout structure from OCR blocks

@@ -200,26 +200,15 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen> {
       final success = await service.purchasePremium(_selectedTier!);
 
       if (success && mounted) {
-        // Calculate expiry based on tier
-        DateTime? expiry;
-        switch (_selectedTier!) {
-          case PremiumTier.monthly:
-            expiry = DateTime.now().add(const Duration(days: 30));
-            break;
-          case PremiumTier.quarterly:
-            expiry = DateTime.now().add(const Duration(days: 90));
-            break;
-          case PremiumTier.half_yearly:
-            expiry = DateTime.now().add(const Duration(days: 180));
-            break;
-          case PremiumTier.yearly:
-            expiry = DateTime.now().add(const Duration(days: 365));
-            break;
-        }
+        // Purchase processing happens in the purchase stream listener
+        // The service will automatically set premium status and expiry
+        // Wait a moment for the purchase to be processed
+        await Future.delayed(const Duration(milliseconds: 500));
 
-        await service.setPremium(tier: _selectedTier!, expiry: expiry);
+        // Check if premium was activated
+        final isPremium = await service.isPremium();
 
-        if (mounted) {
+        if (isPremium && mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Premium activated successfully!'),
@@ -227,6 +216,14 @@ class _PremiumScreenState extends ConsumerState<PremiumScreen> {
             ),
           );
           Navigator.of(context).pop();
+        } else if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content:
+                  Text('Purchase initiated. Premium will activate shortly.'),
+              duration: Duration(seconds: 3),
+            ),
+          );
         }
       } else if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

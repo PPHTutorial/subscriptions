@@ -1,22 +1,21 @@
 import 'package:flutter/foundation.dart';
 
-/// Development configuration for testing
-///
-/// Set `enableDevMode` to true to bypass all restrictions and ads for testing
 class DevConfig {
-  /// Enable dev mode to bypass restrictions and ads
-  /// Only works in debug mode
   static const bool enableDevMode = true; // Set to true for testing
 
-  /// Check if dev mode is enabled
-  /// Only returns true if both enableDevMode is true AND app is in debug mode
-  static bool get isDevModeEnabled => kDebugMode && enableDevMode;
+  static bool get _effectiveDevMode => kDebugMode ? enableDevMode : false;
 
-  /// Check if ads should be shown
-  /// Returns false if dev mode is enabled
-  static bool get shouldShowAds => !isDevModeEnabled;
+  static bool get isDevModeEnabled => _effectiveDevMode;
 
-  /// Check if restrictions should be applied
-  /// Returns false if dev mode is enabled
-  static bool get shouldApplyRestrictions => !isDevModeEnabled;
+  static bool get shouldShowAds {
+    // In release builds, always show ads (dev mode is disabled)
+    if (kReleaseMode) return true;
+    // In debug builds, check if dev mode is enabled
+    return !isDevModeEnabled;
+  }
+
+  static bool get shouldApplyRestrictions {
+    if (kReleaseMode) return true;
+    return !isDevModeEnabled;
+  }
 }

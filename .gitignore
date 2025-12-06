@@ -52,4 +52,4 @@ app.*.map.json
 assets/data/bin_database_source.json
 android/app/google-services.json
 ios/Runner/GoogleService-Info.
-firebase_options.dart
+lib/firebase_options.dart

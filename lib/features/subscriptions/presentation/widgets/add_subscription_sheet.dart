@@ -5,11 +5,8 @@ import '../../../../core/responsive/responsive_helper.dart';
 import '../../domain/subscription.dart';
 
 class AddSubscriptionSheet extends StatefulWidget {
-  const AddSubscriptionSheet({
-    super.key,
-    required this.onSubmit,
-    this.subscription,
-  });
+  const AddSubscriptionSheet(
+      {super.key, required this.onSubmit, this.subscription});
 
   final Future<void> Function(Subscription subscription) onSubmit;
   final Subscription? subscription; // For editing
@@ -201,79 +198,88 @@ class _AddSubscriptionSheetState extends State<AddSubscriptionSheet> {
                     ),
                   ),
                   SizedBox(height: ResponsiveHelper.spacing(14)),
-                  OutlinedButton.icon(
-                    onPressed: () async {
-                      final now = DateTime.now();
-                      final initialDate = _renewalDate ?? now;
-
-                      // First pick the date
-                      final selectedDate = await showDatePicker(
-                        context: context,
-                        initialDate: initialDate,
-                        firstDate: now.subtract(const Duration(days: 1)),
-                        lastDate: now.add(const Duration(days: 365 * 5)),
-                        builder: (context, child) {
-                          return Theme(
-                            data: Theme.of(context).copyWith(
-                              colorScheme: Theme.of(context)
-                                  .colorScheme
-                                  .copyWith(
-                                      primary: Theme.of(context)
-                                          .colorScheme
-                                          .primary),
-                            ),
-                            child: child!,
-                          );
-                        },
-                      );
-
-                      if (selectedDate != null && mounted) {
-                        // Then pick the time
-                        final selectedTime = await showTimePicker(
-                          context: context,
-                          initialTime: TimeOfDay.fromDateTime(initialDate),
-                          builder: (context, child) {
-                            return Theme(
-                              data: Theme.of(context).copyWith(
-                                colorScheme: Theme.of(context)
-                                    .colorScheme
-                                    .copyWith(
-                                        primary: Theme.of(context)
-                                            .colorScheme
-                                            .primary),
-                              ),
-                              child: child!,
-                            );
-                          },
-                        );
-
-                        if (selectedTime != null && mounted) {
-                          setState(() {
-                            _renewalDate = DateTime(
-                              selectedDate.year,
-                              selectedDate.month,
-                              selectedDate.day,
-                              selectedTime.hour,
-                              selectedTime.minute,
-                            );
-                          });
-                        }
+                  FormField<DateTime>(
+                    validator: (value) {
+                      if (_renewalDate == null) {
+                        return 'Please pick a renewal date & time';
                       }
+                      return null;
                     },
-                    style: OutlinedButton.styleFrom(
-                      padding: EdgeInsets.symmetric(
-                          vertical: ResponsiveHelper.spacing(16)),
-                      shape: RoundedRectangleBorder(
-                        borderRadius:
-                            BorderRadius.circular(ResponsiveHelper.spacing(20)),
-                      ),
-                    ),
-                    icon: const Icon(Icons.event_rounded),
-                    label: Text(
-                      _renewalDate == null
-                          ? 'Pick renewal date & time'
-                          : 'Renews ${DateFormat('MMM dd, yyyy • HH:mm').format(_renewalDate!)}',
-                    ),
+                    builder: (field) {
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          OutlinedButton.icon(
+                            style: ButtonStyle(
+                                side: WidgetStatePropertyAll<BorderSide>(
+                                    BorderSide(
+                                        color: field.errorText != null
+                                            ? Theme.of(context)
+                                                .colorScheme
+                                                .error
+                                            : Theme.of(context)
+                                                .colorScheme
+                                                .outline))),
+                            onPressed: () async {
+                              final now = DateTime.now();
+                              final initialDate = _renewalDate ?? now;
+
+                              // Pick date
+                              final selectedDate = await showDatePicker(
+                                context: context,
+                                initialDate: initialDate,
+                                firstDate:
+                                    now.subtract(const Duration(days: 1)),
+                                lastDate:
+                                    now.add(const Duration(days: 365 * 5)),
+                              );
+
+                              if (selectedDate != null && mounted) {
+                                final selectedTime = await showTimePicker(
+                                  context: context,
+                                  initialTime:
+                                      TimeOfDay.fromDateTime(initialDate),
+                                );
+
+                                if (selectedTime != null && mounted) {
+                                  setState(() {
+                                    _renewalDate = DateTime(
+                                      selectedDate.year,
+                                      selectedDate.month,
+                                      selectedDate.day,
+                                      selectedTime.hour,
+                                      selectedTime.minute,
+                                    );
+                                  });
+
+                                  // IMPORTANT: notify the field that value changed
+                                  field.didChange(_renewalDate);
+                                }
+                              }
+                            },
+                            icon: const Icon(Icons.event_rounded),
+                            label: Text(
+                              _renewalDate == null
+                                  ? 'Pick renewal date & time'
+                                  : 'Renews ${DateFormat('MMM dd, yyyy • HH:mm').format(_renewalDate!)}',
+                            ),
+                          ),
+
+                          // ⛔ validation message (same style as TextFormField)
+                          if (field.errorText != null)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 6, left: 12),
+                              child: Text(
+                                field.errorText!,
+                                style: TextStyle(
+                                  color: Theme.of(context).colorScheme.error,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                        ],
+                      );
+                    },
                   ),
                   SizedBox(height: ResponsiveHelper.spacing(14)),
                   DropdownButtonFormField<SubscriptionCategory>(
@@ -404,12 +410,12 @@ class _AddSubscriptionSheetState extends State<AddSubscriptionSheet> {
                         TextFormField(
                           controller: _customReminderController,
                           keyboardType: TextInputType.number,
-                          decoration: InputDecoration(
+                          decoration: const InputDecoration(
                             labelText: 'Custom reminder (days before)',
-                            suffixIcon: IconButton(
+                            /*  suffixIcon: IconButton(
                               icon: const Icon(Icons.add),
                               onPressed: _addCustomReminder,
-                            ),
+                            ), */
                           ),
                         ),
                       ],
@@ -427,6 +433,12 @@ class _AddSubscriptionSheetState extends State<AddSubscriptionSheet> {
                     ),
                   ),
                   SizedBox(height: ResponsiveHelper.spacing(24)),
+                  if (_formKey.currentState?.validate() == false)
+                    Text(
+                      "An input need data. Check your form",
+                      style:
+                          TextStyle(color: Theme.of(context).colorScheme.error),
+                    ),
                   ElevatedButton(
                     onPressed: _isSaving ? null : _submit,
                     child: _isSaving
@@ -438,6 +450,7 @@ class _AddSubscriptionSheetState extends State<AddSubscriptionSheet> {
                           )
                         : const Text('Save subscription'),
                   ),
+                  SizedBox(height: ResponsiveHelper.spacing(24)),
                 ],
               ),
             ),
@@ -464,11 +477,20 @@ class _AddSubscriptionSheetState extends State<AddSubscriptionSheet> {
   }
 
   Future<void> _submit() async {
-    if (_formKey.currentState?.validate() != true) return;
+    if (_formKey.currentState?.validate() != true) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Check for form input')),
+        );
+      }
+      return;
+    }
     if (_renewalDate == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Pick a renewal date')),
-      );
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Pick a renewal date')),
+        );
+      }
       return;
     }
 
@@ -501,7 +523,10 @@ class _AddSubscriptionSheetState extends State<AddSubscriptionSheet> {
       await widget.onSubmit(subscription);
       if (mounted) {
         setState(() => _isSaving = false);
-        Navigator.of(context).pop();
+        //// Navigator.of(context).pop();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Data Saved Successfully')),
+        );
       }
     } catch (e) {
       if (mounted) {

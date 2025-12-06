@@ -520,7 +520,7 @@ class SmsScannerService {
             }
           }
         } else {
-          return BillingCycle.yearly;
+      return BillingCycle.yearly;
         }
       }
     }
@@ -552,16 +552,16 @@ class SmsScannerService {
             } else if (num == 2) {
               return BillingCycle.monthly;
             } else if (num == 3) {
-              return BillingCycle.quarterly;
+      return BillingCycle.quarterly;
             } else if (num == 6) {
               return BillingCycle.halfYearly;
             } else if (num == 12) {
               return BillingCycle.yearly;
             }
           }
-        } else {
-          return BillingCycle.monthly;
-        }
+    } else {
+      return BillingCycle.monthly;
+    }
       }
     }
 

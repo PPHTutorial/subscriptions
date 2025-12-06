@@ -175,12 +175,35 @@ class _CloudSyncScreenState extends ConsumerState<CloudSyncScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    // App Logo (only show when not signed in)
+                    if (!_isSignedIn) ...[
+                      Center(
+                        child: Image.asset(
+                          'assets/images/applogo.png',
+                          width: ResponsiveHelper.width(80),
+                          height: ResponsiveHelper.width(80),
+                          fit: BoxFit.contain,
+                        ),
+                      ),
+                      SizedBox(height: ResponsiveHelper.spacing(16)),
+                    ],
                     Text(
                       _isSignedIn
                           ? 'Signed In'
                           : (_isSignUpMode ? 'Create Account' : 'Sign In'),
                       style: Theme.of(context).textTheme.titleLarge,
+                      textAlign: TextAlign.center,
                     ),
+                    if (!_isSignedIn) ...[
+                      SizedBox(height: ResponsiveHelper.spacing(8)),
+                      Text(
+                        _isSignUpMode
+                            ? 'Create a new account to sync your subscriptions'
+                            : 'Sign in to sync your subscriptions across devices',
+                        style: Theme.of(context).textTheme.bodyMedium,
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
                     SizedBox(height: ResponsiveHelper.spacing(16)),
                     if (!_isSignedIn) ...[
                       Form(
@@ -1070,13 +1093,13 @@ class _BackupSection extends StatelessWidget {
   }
 }
 
-class _RestoreSection extends StatelessWidget {
+class _RestoreSection extends ConsumerWidget {
   const _RestoreSection({required this.syncService});
 
   final CloudSyncService syncService;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Card(
       color: Theme.of(context).colorScheme.surfaceContainer,
       child: Padding(
@@ -1090,19 +1113,62 @@ class _RestoreSection extends StatelessWidget {
             ),
             SizedBox(height: ResponsiveHelper.spacing(8)),
             Text(
-              'Download subscriptions from the cloud',
+              'Download subscriptions from the cloud and save to local storage',
               style: Theme.of(context).textTheme.bodySmall,
             ),
             SizedBox(height: ResponsiveHelper.spacing(16)),
             OutlinedButton.icon(
               onPressed: () async {
                 try {
-                  await syncService.downloadSubscriptions();
+                  // Download subscriptions from cloud
+                  final cloudSubscriptions =
+                      await syncService.downloadSubscriptions();
+
+                  if (cloudSubscriptions.isEmpty) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('No subscriptions found in cloud'),
+                          duration: Duration(seconds: 2),
+                        ),
+                      );
+                    }
+                    return;
+                  }
+
+                  // Save each subscription to local persistence
+                  final controller =
+                      ref.read(subscriptionControllerProvider.notifier);
+                  int addedCount = 0;
+                  int updatedCount = 0;
+
+                  // Get current local subscriptions
+                  final currentSubs = ref.read(subscriptionControllerProvider);
+                  final localSubs = currentSubs.value ?? [];
+
+                  for (final cloudSub in cloudSubscriptions) {
+                    // Check if subscription already exists locally
+                    final existingIndex =
+                        localSubs.indexWhere((s) => s.id == cloudSub.id);
+
+                    if (existingIndex >= 0) {
+                      // Update existing subscription
+                      await controller.updateSubscription(cloudSub);
+                      updatedCount++;
+                    } else {
+                      // Add new subscription
+                      await controller.addSubscription(cloudSub);
+                      addedCount++;
+                    }
+                  }
+
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Restore completed'),
-                        duration: Duration(seconds: 2),
+                      SnackBar(
+                        content: Text(
+                          'Restore completed: $addedCount added, $updatedCount updated',
+                        ),
+                        duration: const Duration(seconds: 3),
                       ),
                     );
                   }

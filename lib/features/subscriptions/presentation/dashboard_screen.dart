@@ -13,11 +13,11 @@ import '../../advanced/ai_insights/presentation/ai_insights_screen.dart';
 import '../../advanced/cloud_sync/data/cloud_sync_provider.dart';
 import '../../advanced/cloud_sync/data/cloud_sync_service.dart';
 import '../../advanced/cloud_sync/presentation/cloud_sync_screen.dart';
+import '../application/subscription_controller.dart';
+import '../domain/subscription.dart';
 import '../../../core/premium/premium_restrictions.dart';
 import '../../../core/premium/premium_provider.dart';
 import '../../../core/premium/premium_screen.dart';
-import '../application/subscription_controller.dart';
-import '../domain/subscription.dart';
 import 'widgets/analytics_section.dart';
 import 'widgets/insight_card.dart';
 import 'widgets/subscription_card.dart';
@@ -401,14 +401,19 @@ class DashboardScreen extends ConsumerWidget {
   }
 }
 
-class _EmptyState extends StatelessWidget {
+class _EmptyState extends ConsumerWidget {
   const _EmptyState({required this.onAddTap});
 
   final VoidCallback onAddTap;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final formatter = DateFormat('MMMM');
+    final syncService = ref.watch(cloudSyncServiceProvider);
+    final authStatus = ref.watch(cloudSyncSignedInProvider);
+    final isSignedIn = authStatus.value ?? false;
+    final cloudSyncAvailable = syncService != null;
+
     return Padding(
       padding: const EdgeInsets.all(32),
       child: Column(
@@ -437,6 +442,27 @@ class _EmptyState extends StatelessWidget {
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 24),
+          // Restore from Cloud button (if cloud sync is available)
+          if (cloudSyncAvailable) ...[
+            OutlinedButton.icon(
+              onPressed: () => _handleRestoreFromCloud(context, ref),
+              icon: Icon(
+                isSignedIn
+                    ? Icons.cloud_download_rounded
+                    : Icons.cloud_off_rounded,
+              ),
+              label: Text(
+                isSignedIn ? 'Restore from Cloud' : 'Sign in to Restore',
+              ),
+              style: OutlinedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
           ElevatedButton.icon(
             onPressed: onAddTap,
             icon: const Icon(Icons.add),
@@ -445,6 +471,130 @@ class _EmptyState extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Future<void> _handleRestoreFromCloud(
+      BuildContext context, WidgetRef ref) async {
+    // Check if cloud sync is available
+    final syncService = ref.read(cloudSyncServiceProvider);
+    if (syncService == null) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Cloud Sync is not available. Please check your configuration.',
+            ),
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+      return;
+    }
+
+    // Check authentication status
+    final authStatus = ref.read(cloudSyncSignedInProvider);
+    final isSignedIn = authStatus.value ?? false;
+
+    if (!isSignedIn) {
+      // Navigate to Cloud Sync screen to sign in
+      if (context.mounted) {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (context) => const CloudSyncScreen(),
+          ),
+        );
+      }
+      return;
+    }
+
+    // User is authenticated, proceed with restore
+    await _performRestore(context, ref, syncService);
+  }
+
+  Future<void> _performRestore(
+    BuildContext context,
+    WidgetRef ref,
+    CloudSyncService syncService,
+  ) async {
+    // Show loading dialog
+    if (context.mounted) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: Card(
+            child: Padding(
+              padding: EdgeInsets.all(24.0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text('Restoring from cloud...'),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    try {
+      // Download subscriptions from cloud
+      final cloudSubscriptions = await syncService.downloadSubscriptions();
+
+      if (cloudSubscriptions.isEmpty) {
+        if (context.mounted) {
+          Navigator.of(context).pop(); // Close loading dialog
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('No subscriptions found in cloud'),
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+        return;
+      }
+
+      // Save each subscription to local persistence
+      final controller = ref.read(subscriptionControllerProvider.notifier);
+      int addedCount = 0;
+
+      for (final cloudSub in cloudSubscriptions) {
+        // Add new subscription
+        await controller.addSubscription(cloudSub);
+        addedCount++;
+      }
+
+      if (context.mounted) {
+        Navigator.of(context).pop(); // Close loading dialog
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+                'Restore completed: $addedCount subscription${addedCount != 1 ? 's' : ''} restored'),
+            duration: const Duration(seconds: 3),
+            action: SnackBarAction(
+              label: 'OK',
+              onPressed: () {},
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        Navigator.of(context).pop(); // Close loading dialog
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Restore failed: $e'),
+            duration: const Duration(seconds: 4),
+            action: SnackBarAction(
+              label: 'Dismiss',
+              onPressed: () {},
+            ),
+          ),
+        );
+      }
+    }
   }
 }
 
@@ -1020,6 +1170,12 @@ class _SubscriptionLimitCard extends ConsumerWidget {
                     ),
                     if (remaining == 0)
                       FilledButton.icon(
+                        style: FilledButton.styleFrom(
+                          backgroundColor:
+                              Theme.of(context).colorScheme.onError,
+                          foregroundColor:
+                              Theme.of(context).colorScheme.onErrorContainer,
+                        ),
                         onPressed: () {
                           Navigator.of(context).push(
                             MaterialPageRoute(
@@ -1027,7 +1183,9 @@ class _SubscriptionLimitCard extends ConsumerWidget {
                             ),
                           );
                         },
-                        icon: const Icon(Icons.star_rounded),
+                        icon: const Icon(
+                          Icons.star_rounded,
+                        ),
                         label: const Text('Upgrade'),
                       ),
                   ],

@@ -9,16 +9,13 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
-    <!-- SMS Permissions (for SMS scanner) -->
+    <!-- SMS Permissions (for SMS scanner - on-demand scanning only) -->
     <uses-permission android:name="android.permission.READ_SMS" />
-    <uses-permission android:name="android.permission.RECEIVE_SMS" />
-
-    <!-- Storage Permissions (for receipt upload) -->
-    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="32"
         tools:replace="android:maxSdkVersion" />
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
 
     <!-- Camera Permission (for receipt upload) -->
     <uses-permission android:name="android.permission.CAMERA" />
@@ -34,7 +31,7 @@
         <!-- AdMob Application ID -->
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
-            android:value="ca-app-pub-9043208558525567~4722628074" />
+            android:value="ca-app-pub-9043208558525567~1478374833" />
 
         <activity
             android:name=".MainActivity"

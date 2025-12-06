@@ -58,14 +58,14 @@ class _EmailScannerScreenState extends ConsumerState<EmailScannerScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             // Header
-            Text(
+                      Text(
               'Select Email Provider',
               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                     fontWeight: FontWeight.bold,
-                  ),
+                      ),
             ),
             SizedBox(height: ResponsiveHelper.spacing(8)),
-            Text(
+                      Text(
               'Choose your email provider to scan for subscriptions',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                     color: Theme.of(context)
@@ -162,8 +162,8 @@ class _EmailScannerScreenState extends ConsumerState<EmailScannerScreen> {
     } else {
       // Pre-fill IMAP settings for known providers
       final settings = ImapEmailScannerService.getImapSettings(provider);
-      _imapServerController.text = settings['server'] ?? '';
-      _imapPortController.text = settings['port']?.toString() ?? '993';
+        _imapServerController.text = settings['server'] ?? '';
+        _imapPortController.text = settings['port']?.toString() ?? '993';
 
       // Auto-fill custom email credentials for testing (Titan Email)
       if (provider == EmailProvider.custom) {
@@ -432,20 +432,20 @@ class _ProviderGridItem extends StatelessWidget {
     return Material(
       color: Colors.transparent,
       child: InkWell(
-        onTap: onTap,
+      onTap: onTap,
         borderRadius: BorderRadius.circular(ResponsiveHelper.spacing(16)),
-        child: Container(
-          decoration: BoxDecoration(
+      child: Container(
+        decoration: BoxDecoration(
             color: selected
                 ? Theme.of(context).colorScheme.primaryContainer
                 : Theme.of(context).colorScheme.surfaceContainer,
             borderRadius: BorderRadius.circular(ResponsiveHelper.spacing(16)),
-            border: Border.all(
-              color: selected
-                  ? Theme.of(context).colorScheme.primary
+          border: Border.all(
+            color: selected
+                ? Theme.of(context).colorScheme.primary
                   : Theme.of(context).colorScheme.outline.withOpacity(0.2),
-              width: selected ? 2 : 1,
-            ),
+            width: selected ? 2 : 1,
+          ),
           ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -614,8 +614,8 @@ class _ConnectionSettingsDialogContentState
             // Header
             Padding(
               padding: EdgeInsets.all(ResponsiveHelper.spacing(24)),
-              child: Row(
-                children: [
+        child: Row(
+          children: [
                   Container(
                     padding: EdgeInsets.all(ResponsiveHelper.spacing(12)),
                     decoration: BoxDecoration(
@@ -707,9 +707,9 @@ class _ConnectionSettingsDialogContentState
                                 child:
                                     CircularProgressIndicator(strokeWidth: 2),
                               ),
-                              SizedBox(width: ResponsiveHelper.spacing(12)),
-                              Expanded(
-                                child: Text(
+            SizedBox(width: ResponsiveHelper.spacing(12)),
+            Expanded(
+              child: Text(
                                   'Connecting with saved credentials...',
                                   style: Theme.of(context).textTheme.bodyMedium,
                                 ),
@@ -841,9 +841,9 @@ class _ConnectionSettingsDialogContentState
                       ),
                       child: Row(
                         children: [
-                          Icon(
-                            Icons.check_circle,
-                            color: Theme.of(context).colorScheme.primary,
+              Icon(
+                Icons.check_circle,
+                color: Theme.of(context).colorScheme.primary,
                             size: 20,
                           ),
                           SizedBox(width: ResponsiveHelper.spacing(8)),
@@ -908,7 +908,7 @@ class _ConnectionSettingsDialogContentState
                     ),
                 ],
               ),
-            ),
+              ),
           ],
         ),
       ),

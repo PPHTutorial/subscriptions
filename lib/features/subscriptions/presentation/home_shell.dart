@@ -11,6 +11,7 @@ import '../../../core/premium/premium_restrictions.dart';
 import '../../../core/premium/premium_provider.dart';
 import '../../../core/premium/premium_screen.dart';
 import '../../advanced/cloud_sync/data/cloud_sync_provider.dart';
+import '../../advanced/cloud_sync/data/cloud_sync_service.dart';
 import '../../advanced/cloud_sync/presentation/cloud_sync_screen.dart';
 import '../../advanced/email_scanner/presentation/email_scanner_screen.dart';
 import '../../advanced/receipt_ocr/presentation/receipt_upload_screen.dart';
@@ -226,6 +227,13 @@ class _HomeShellState extends ConsumerState<HomeShell> {
                     _searchQuery = '';
                   });
                 },
+              ),
+            // Restore from Cloud button (for Overview and Subscriptions screens)
+            if ((_index == 0 || _index == 1) && !_isSearchExpanded)
+              IconButton(
+                icon: const Icon(Icons.cloud_download_rounded),
+                tooltip: 'Restore from Cloud',
+                onPressed: () => _handleRestoreFromCloud(context, ref),
               ),
             if (_index == 1 && !_isSearchExpanded) ...[
               // Search icon - expands to search field
@@ -653,6 +661,145 @@ class _HomeShellState extends ConsumerState<HomeShell> {
         ),
       ),
     );
+  }
+
+  Future<void> _handleRestoreFromCloud(
+      BuildContext context, WidgetRef ref) async {
+    // Check if cloud sync is available
+    final syncService = ref.read(cloudSyncServiceProvider);
+    if (syncService == null) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Cloud Sync is not available. Please check your configuration.',
+            ),
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+      return;
+    }
+
+    // Check authentication status
+    final authStatus = ref.read(cloudSyncSignedInProvider);
+    final isSignedIn = authStatus.value ?? false;
+
+    if (!isSignedIn) {
+      // Navigate to Cloud Sync screen to sign in
+      if (context.mounted) {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (context) => const CloudSyncScreen(),
+          ),
+        );
+      }
+      return;
+    }
+
+    // User is authenticated, proceed with restore
+    await _performRestore(context, ref, syncService);
+  }
+
+  Future<void> _performRestore(
+    BuildContext context,
+    WidgetRef ref,
+    CloudSyncService syncService,
+  ) async {
+    // Show loading dialog
+    if (context.mounted) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(
+          child: Card(
+            child: Padding(
+              padding: EdgeInsets.all(24.0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text('Restoring from cloud...'),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    try {
+      // Download subscriptions from cloud
+      final cloudSubscriptions = await syncService.downloadSubscriptions();
+
+      if (cloudSubscriptions.isEmpty) {
+        if (context.mounted) {
+          Navigator.of(context).pop(); // Close loading dialog
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('No subscriptions found in cloud'),
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+        return;
+      }
+
+      // Save each subscription to local persistence
+      final controller = ref.read(subscriptionControllerProvider.notifier);
+      int addedCount = 0;
+      int updatedCount = 0;
+
+      // Get current local subscriptions
+      final currentSubs = ref.read(subscriptionControllerProvider);
+      final localSubs = currentSubs.value ?? [];
+
+      for (final cloudSub in cloudSubscriptions) {
+        // Check if subscription already exists locally
+        final existingIndex = localSubs.indexWhere((s) => s.id == cloudSub.id);
+
+        if (existingIndex >= 0) {
+          // Update existing subscription
+          await controller.updateSubscription(cloudSub);
+          updatedCount++;
+        } else {
+          // Add new subscription
+          await controller.addSubscription(cloudSub);
+          addedCount++;
+        }
+      }
+
+      if (context.mounted) {
+        Navigator.of(context).pop(); // Close loading dialog
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Restore completed: $addedCount added, $updatedCount updated',
+            ),
+            duration: const Duration(seconds: 3),
+            action: SnackBarAction(
+              label: 'OK',
+              onPressed: () {},
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        Navigator.of(context).pop(); // Close loading dialog
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Restore failed: $e'),
+            duration: const Duration(seconds: 4),
+            action: SnackBarAction(
+              label: 'Dismiss',
+              onPressed: () {},
+            ),
+          ),
+        );
+      }
+    }
   }
 
   Future<void> _openCreateSheet() async {
